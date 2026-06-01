@@ -1,0 +1,12 @@
+# OS / editor junk
+.DS_Store
+.fuse_hidden*
+*.swp
+*~
+
+# Node / test harness dependencies
+node_modules/
+
+# Dev-only files (kept locally, not part of the playable game)
+tests/
+CLAUDE.md
