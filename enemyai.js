@@ -167,7 +167,7 @@ const WORKER_COST = 50;        // scrap to hire an extra worker (a fast way to g
 function teamUnitCount(owner){ let n=0; for(const e of game.enemies){ if(e.owner===owner && !e.eliminated) n++; } return n; }
 function teamCopterCount(owner){ let n=0; for(const e of game.enemies){ if(e.owner===owner && !e.eliminated && e.copter && !e.copter.destroyed) n++; } return n; }   // minicopters a team currently fields (start: 1 on the primary; bought extras add to this, capped)
 function botHireWorker(b){      // spend banked scrap to hire ONE more worker; capped per team so it stays balanced
-  const cap = b.hard?8:5;       // total team units (1 primary + workers). HARD teams field up to 8; weak teams 5. Capped so teams don't cluster/camp at base.
+  const cap = b.hard?16:8;      // total team units (1 primary + workers): hard teams up to 15 workers, everyone else 7. Capped so teams don't cluster/camp at base.
   if(!b.primary || teamUnitCount(b.owner) >= cap) return false;
   const tc=game.deploys.get(b.tcKey), tcS=(tc&&tc.store)?(tc.store.scrap||0):0, have=(b.scrap||0)+tcS;
   if(have < WORKER_COST) return false;
