@@ -259,6 +259,16 @@ function updateBullets(dt) {
       }
     }
 
+    if (!dead && game.patrol && b.from !== 'patrol') {   // the patrol heli is shootable by everyone (segment test, generous hull radius)
+      const p = game.patrol;
+      if (ptSeg(p.x, p.y, b.px, b.py, b.x, b.y) < 34) {
+        p.hp -= b.dmg;
+        burst(b.x, b.y, COL.steelLt, 4, 140);
+        if (p.hp <= 0) patrolCrash(p);
+        dead = true;
+      }
+    }
+
     if (!dead && game.airdrop && game.airdrop.fall >= 1) {  // shoot the landed airdrop crate to spill the loot (segment test: fast bullets never tunnel past)
       const a = game.airdrop;
       if (ptSeg(a.x, a.y, b.px, b.py, b.x, b.y) < 22) {

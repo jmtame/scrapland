@@ -68,6 +68,8 @@ function loop(now) {
       game.plane = null;
       game.airdrop = null;
       game.airdropT = 150;
+      game.patrol = null;
+      game.patrolT = undefined;
       game.aggressor = -1;
       game.aggressorOwner = null;
       game.aggroT = 0;
