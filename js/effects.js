@@ -941,6 +941,7 @@ function drawWorld() {
   drawRockets();
   drawMuzzle();
   drawAirdrop();
+  drawLockedCrate();
   drawParticles();
   drawFlashes();
   drawFloats();
@@ -1172,6 +1173,114 @@ function buildPalms() {
         (typeof lakeAt === 'function' && lakeAt(x, y))) continue;
     game.palms.push({ x, y, seed: rand(0, 9), desert: true });
   }
+}
+
+/* ---- locked crate event: every ~4-6 min a hackable, high-value crate spawns at a random
+   monument and is announced map-wide. The 150s unlock only ticks while someone (any team, or the
+   player) stands at the crate, so it is a deliberate FIGHT MAGNET: squads converge, contest the
+   spot, and the loot spills to whoever holds it when it opens. ---- */
+const CRATE_HACK_T = 150;   // seconds of attended hacking to open
+const CRATE_R = 150;        // attend/contest radius
+
+function updateLockedCrate(dt) {
+  game.crateT = (game.crateT === undefined ? rand(100, 180) : game.crateT - dt);
+  if (game.crateT <= 0 && !game.lockedCrate && game.monuments && game.monuments.length) {
+    const m = game.monuments[randi(0, game.monuments.length - 1)];
+    const a = Math.random() * TAU;
+    game.lockedCrate = {
+      x: m.x + Math.cos(a) * 90, y: m.y + Math.sin(a) * 90,
+      mon: m.name, t: CRATE_HACK_T, started: false, blink: 0
+    };
+    game.crateT = rand(240, 360);
+    flashTip('Locked crate at the ' + m.name + '!');
+    game.elims.push({ text: 'LOCKED CRATE — ' + m.name, t: 12 });   // map-wide announcement banner
+  }
+  const c = game.lockedCrate;
+  if (!c) return;
+  c.blink += dt;
+  // the hack ticks only while ATTENDED (any unit or the live player at the crate)
+  let attended = (!player.dead && !game.ghost && dist2(player.x, player.y, c.x, c.y) < CRATE_R * CRATE_R);
+  if (!attended) {
+    for (const b of game.enemies) {
+      if (b.dead || b.eliminated || b.flying) continue;
+      if (dist2(b.x, b.y, c.x, c.y) < CRATE_R * CRATE_R) { attended = true; break; }
+    }
+  }
+  if (attended) {
+    c.started = true;
+    c.t -= dt;
+  }
+  if (c.t <= 0) {   // open: rich spill on the spot — explosives, scrap, ammo, maybe a sniper
+    burst(c.x, c.y, '#ffd27a', 30, 300);
+    burst(c.x, c.y, COL.barrelLt, 16, 220);
+    spillStack(c.x, c.y, 'scrap', randi(80, 140));
+    spillStack(c.x, c.y, 'metal', randi(40, 80));
+    for (let i = 0, n = randi(3, 6); i < n; i++) addLoot(c.x, c.y, 'rocket', 1);
+    for (let i = 0, n = randi(2, 4); i < n; i++) addLoot(c.x, c.y, 'satchel', 1);
+    addLoot(c.x, c.y, 'ammo', randi(80, 160));
+    if (Math.random() < 0.5) addLoot(c.x, c.y, 'sniper', 1);
+    flashTip('Locked crate opened!');
+    game.lockedCrate = null;
+  }
+}
+
+function drawLockedCrate() {
+  // World-space: armored crate, blinking hack light (red idle / amber hacking), progress ring.
+  const c = game.lockedCrate;
+  if (!c || !inView(c.x, c.y, 80)) return;
+  shadow(c.x, c.y + 10, 30, 10);
+  ctx.fillStyle = COL.steelDk;
+  ctx.fillRect(c.x - 20, c.y - 16, 40, 30);
+  ctx.fillStyle = COL.steel;
+  ctx.fillRect(c.x - 20, c.y - 16, 40, 8);
+  ctx.strokeStyle = COL.steelLt;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(c.x - 20, c.y - 16, 40, 30);
+  ctx.fillStyle = COL.steelLt;
+  ctx.fillRect(c.x - 3, c.y - 6, 6, 10);   // lock plate
+  const on = (c.blink % 0.8) < 0.4;
+  ctx.fillStyle = on ? (c.started ? '#ffb84a' : '#d23c28') : '#3a3f45';
+  ctx.beginPath();
+  ctx.arc(c.x + 13, c.y - 11, 3.4, 0, TAU);
+  ctx.fill();
+  if (c.started && c.t < CRATE_HACK_T) {   // unlock progress ring
+    ctx.strokeStyle = 'rgba(255,200,90,.85)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 30, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - c.t / CRATE_HACK_T));
+    ctx.stroke();
+  }
+}
+
+function drawCrateMarker() {
+  // Screen-space: label / edge arrow guiding everyone to the active locked crate.
+  const c = game.lockedCrate;
+  if (!c) return;
+  const sx = (c.x - game.cam.cx) * game.zoom + VW / 2;
+  const sy = (c.y - game.cam.cy) * game.zoom + VH / 2;
+  const m = 54;
+  ctx.save();
+  if (sx >= m && sx <= VW - m && sy >= m && sy <= VH - m) {
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#ffb84a';
+    ctx.font = 'bold 11px "Trebuchet MS",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(c.started ? ('CRATE ' + Math.ceil(c.t) + 's') : 'LOCKED CRATE', sx, sy - 44);
+  } else {
+    const ex = clamp(sx, m, VW - m);
+    const ey = clamp(sy, m, VH - m);
+    ctx.translate(ex, ey);
+    ctx.fillStyle = 'rgba(255,184,74,.92)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#3a2c0a';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('C', 0, 5);
+  }
+  ctx.restore();
+  ctx.textAlign = 'left';
 }
 
 function drawAirdrop() {
@@ -1431,6 +1540,7 @@ function render() {
   else drawReticle();
   drawBlasts();
   drawAirdropMarker();
+  drawCrateMarker();
   drawRaidAlarm();
   if (player.hurt > 0) {
     ctx.fillStyle = 'rgba(150,28,18,' + (player.hurt * 0.5) + ')';
