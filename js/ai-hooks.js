@@ -80,7 +80,9 @@ function botDie(b) {
 function botEliminate(b) {
   b.eliminated = true;
   b.dead = true;
-  game.elims.push({ text: 'Base ' + (b.id + 1) + ' ELIMINATED', t: 30 });
+  // Every unit of a dying team passes through here in the same sweep — only the
+  // team's primary posts the banner, so an elimination shows ONE message, not one per unit.
+  if (b.primary) game.elims.push({ text: 'Base ' + (b.id + 1) + ' ELIMINATED', t: 30 });
 }
 
 // A base whose TC was cracked -> clear its orphaned walls/floors/turrets so they don't litter the map
