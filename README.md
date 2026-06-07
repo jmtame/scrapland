@@ -17,8 +17,9 @@ cd scrapland
 open index.html      # macOS — or just double-click the file
 ```
 
-It's two files sharing one global scope: `index.html` (the game) and
-`enemyai.js` (the AI). Keep them in the same folder.
+`index.html` holds the markup and loads the code from `js/` — classic scripts
+sharing one global scope (game systems plus the `ai-*.js` enemy AI). No build
+step; keep the folder together.
 
 ## Controls
 
@@ -42,6 +43,7 @@ Close menu       Esc
 ## Notes
 
 The AI teams run a full build-first economy: they start with nothing, gather
-scrap, found bases, buy weapons and explosives at the trade zone, and launch
+scrap, found bases, hire workers up to a team cap (16 units for hard teams,
+8 otherwise), buy weapons and explosives at the trade zone, and launch
 coordinated raids — breaching walls to reach a base's tool cupboard. Watch the
 map collapse from many teams down to a winner.
