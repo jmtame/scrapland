@@ -284,8 +284,19 @@ function botRaidTarget(b) {
     const box = game.deploys.get(o.boxKey);
     const loot = box && box.store ? (box.store.wood + box.store.stone + box.store.metal) : 0;
     const turrets = botOwnerTurrets(o.owner);
-    // prefer closer + weaker-defended + lootier
-    const score = dist2(b.hx, b.hy, o.hx, o.hy) * (1 + turrets * 0.30) / (1 + loot * 0.003);
+    // HARD-team intel: count the target's units currently AT HOME — hard raid-callers strike bases
+    // whose squad is out gathering/raiding/trading instead of punching into a manned fort.
+    let defHome = 0;
+    if (b.hard) {
+      for (const u of game.enemies) {
+        if (u.owner !== o.owner || u.dead || u.eliminated) continue;
+        if (dist2(u.x, u.y, o.hx, o.hy) < 720 * 720) defHome++;
+      }
+    }
+    // prefer closer + weaker-defended + emptier (hard only) + lootier; 0.55/defender ≈ an empty
+    // base reads ~35% closer than an average-manned one — enough to redirect between comparable
+    // targets without sending squads across the map
+    const score = dist2(b.hx, b.hy, o.hx, o.hy) * (1 + turrets * 0.30) * (1 + defHome * 0.55) / (1 + loot * 0.003);
     if (score < bd) { bd = score; best = o; }
   }
   if (!b.ally) {    // enemies raid the player too; allied workers don't

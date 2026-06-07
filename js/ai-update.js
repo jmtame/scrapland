@@ -160,9 +160,25 @@ function updateEnemies(dt) {
 
       const units = game.enemies.filter(e =>
         e.owner === ow && !e.eliminated && !e.dead && !e.flying && !e._unfounded && !e._aboard);
+      // HARD-team intel: count enemies COMMITTED to raiding us (state 'raid', transport riders
+      // included) once they cross a ~2600px tripwire — defenders are home and set BEFORE the
+      // breach starts (~16s warning at BOT_SPEED), but the base is NOT a permanent garrison for
+      // the squad's whole trek (map-wide staging froze the economy and made forts uncrackable —
+      // matches stalled). Other teams only see attackers at the perimeter (atkCount).
+      let inbound = 0;
+      if (units.length && units[0].hard) {
+        for (const o of game.enemies) {
+          if (o.owner === ow || o.dead || o.eliminated) continue;
+          if (!(o.raid && o.raid.owner === ow && o.state === 'raid')) continue;
+          for (const r of recs) {
+            if (dist2(o.x, o.y, r.hx, r.hy) < 2600 * 2600) { inbound++; break; }
+          }
+        }
+      }
       // Match attackers + at most 1 extra (2 enemies -> 3 max); explosive raid -> everyone. Defense
       // stays HONEST — a base only falls to a real, coordinated raid, never an artificial nerf.
-      const wantDef = urgent ? units.length : (atkCount > 0 ? Math.min(atkCount + 1, units.length) : 0);
+      const threat = Math.max(atkCount, inbound);
+      const wantDef = urgent ? units.length : (threat > 0 ? Math.min(threat + 1, units.length) : 0);
       if (wantDef > 0) {
         const cx = atkCount ? atkX / atkCount : recs[0].hx;
         const cy = atkCount ? atkY / atkCount : recs[0].hy;
@@ -250,6 +266,48 @@ function updateEnemies(dt) {
       } else {
         st.raidTarget = null;
         units.forEach(u => { u._rocketer = false; });
+      }
+
+      // ---- HARD-team intel: LOOT RUNS. One free unit is sent map-wide to the active airdrop or to
+      // far high-value ground loot (a convoy-wreck pile, marked by rocket/satchel items) — other
+      // teams only spot these locally (2600px airdrop race / 520px pickup). A committed, deadline-
+      // bounded excursion like a monument run, so it adds zero per-frame re-deciding. ----
+      if (units.length && units[0].hard && (game.t || 0) > (st._lootCd || 0) &&
+          !units.some(u => u._lootRun)) {
+        let prize = null;
+        if (game.airdrop) {
+          prize = { x: game.airdrop.x, y: game.airdrop.gy, kind: 'airdrop' };
+        } else if (game.loot) {
+          for (const L of game.loot) {
+            if (L.kind !== 'rocket' && L.kind !== 'satchel') continue;
+            // skip piles sitting inside someone's base (turret ring = a trap, and raid-site debris
+            // is contested by its owner anyway)
+            let inBase = false;
+            for (const e of game.enemies) {
+              if (!e.primary || e.eliminated || e.owner === ow || !baseAlive(e)) continue;
+              if (dist2(L.x, L.y, e.hx, e.hy) < 800 * 800) { inBase = true; break; }
+            }
+            if (!inBase) { prize = { x: L.x, y: L.y, kind: 'pile' }; break; }
+          }
+        }
+        if (prize) {
+          const free = units.filter(u =>
+            !u.primary && !u._defDuty && !u._buildDuty && !u._rocketer && !u._monRun &&
+            u.state === 'gather');
+          if (free.length) {
+            const runner = free.sort((p, q) =>
+              dist2(p.x, p.y, prize.x, prize.y) - dist2(q.x, q.y, prize.x, prize.y))[0];
+            const trek = Math.hypot(prize.x - runner.x, prize.y - runner.y);
+            // local prizes are handled by the normal race/pickup logic — only send for FAR ones,
+            // and skip marathon treks (the prize is stale/contested long before a cross-map walk)
+            if (trek > (prize.kind === 'airdrop' ? 2400 : 520) && trek < 4500) {
+              // real paths wind around terrain and combat interruptions — budget ~1.8x straight-line
+              prize.until = (game.t || 0) + (trek / BOT_SPEED) * 1.8 + 20;
+              runner._lootRun = prize;
+              st._lootCd = (game.t || 0) + 45;
+            }
+          }
+        }
       }
     }
   }
@@ -1378,6 +1436,26 @@ function updateBot(b, dt) {
 
   // (Bank-when-full / go-buy-rockets / launch-raid are decided by the committed PLANNER above —
   // the gather handler PURELY gathers: loot interrupt, airdrop, monument run, node harvest.)
+
+  // HARD-team LOOT RUN (assigned by the team pass): trek to a far airdrop / rich pile, then hand
+  // off to the normal race/pickup logic on arrival. Committed + deadline-bounded, like a monument
+  // run, so it cannot churn.
+  if (b._lootRun) {
+    const run = b._lootRun;
+    const runDist = Math.hypot(run.x - b.x, run.y - b.y);
+    const arrived = run.kind === 'airdrop'
+      ? (runDist < 2200 && game.airdrop) || (!game.airdrop && runDist < 480)   // crate in local race range (or already cracked -> walk onto the spill)
+      : runDist < 480;                                                          // pile inside botNearestLoot's pickup radius
+    if (arrived || (game.t || 0) > run.until ||
+        (run.kind === 'pile' && !(game.loot || []).some(L =>
+          (L.kind === 'rocket' || L.kind === 'satchel') && dist2(L.x, L.y, run.x, run.y) < 300 * 300))) {
+      b._lootRun = null;   // hand off / expired / pile already scooped — resume normal gathering
+    } else {
+      b._act = 'loot';
+      botGoto(b, run.x, run.y, 170, dt);
+      return;
+    }
+  }
 
   // Dropped loot nearby -> COMMIT to ONE item (botNearestLoot); abandon just THAT item if it's
   // unreachable, not all loot.
