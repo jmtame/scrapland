@@ -124,11 +124,11 @@ function botBuild(b){    // proactive base development, in the user's priority o
   const floors=botBaseFloors(b.owner);
   const minFloors=b.hard?9:5, maxTur=b.hard?10:b.weak?5:8, capFloors=b.hard?49:36;   // ~7x7 (hard) / 6x6 fortress: still tough, but CRACKABLE so matches resolve, and a smaller footprint = far less at-base circling/idle
   if(floors<minFloors && botAddFloor(b)) return true;            // 1: footprint (hard = larger = longer path to the Tool Cupboard)
-  if(botOwnerTurrets(b.owner)<maxTur && botAddTurret(b)) return true; // 2: ring with turrets (hard = more) for animal + raid defense
+  if(b.primary && floors>=5 && botHireWorker(b)) return true;    // 2: HIRE workers — each one compounds the whole economy, so hiring outranks defenses (capped per team)
+  if(botOwnerTurrets(b.owner)<maxTur && botAddTurret(b)) return true; // 3: ring with turrets (hard = more) for animal + raid defense
   if(b.hard && botHarden(b)) return true;                        // hard bots harden walls to stone/metal early -> expensive to breach
-  if(!b.jack && botHas(b,'wood',120) && botHas(b,'metal',60)){ botPay(b,'wood',120); botPay(b,'metal',60); b.jack=true;  // 3: jackhammer (3x gather)
+  if(!b.jack && botHas(b,'wood',120) && botHas(b,'metal',60)){ botPay(b,'wood',120); botPay(b,'metal',60); b.jack=true;  // 4: jackhammer (3x gather)
     addFloat(b.x,b.y-22,'+jackhammer','#e6c878'); return true; }
-  if(b.primary && floors>=5 && botHireWorker(b)) return true;    // 3.5: HIRE a worker once the base is established (capped) — more workers = faster economy (a strong, balanced growth lever)
   b._hf=!b._hf;                                                  // 4: harden WALLS and FOUNDATIONS, alternating which is tried first so BOTH advance even while the base keeps expanding (walls alone would always have work and floors would never upgrade)
   if(b._hf){ if(botHardenFloor(b)) return true; if(botHarden(b)) return true; }
   else { if(botHarden(b)) return true; if(botHardenFloor(b)) return true; }

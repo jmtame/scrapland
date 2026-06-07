@@ -131,6 +131,12 @@ function updateBot(b,dt){
     if(b.copter){ b.copter.destroyed=false; b.copter.hp=b.copter.max; b.copter.x=b.hx-TILE*4; b.copter.y=b.hy; } } return; }   // only the primary has a copter; parked well west
   b.gunCd-=dt; b.rkCd-=dt; b.think-=dt; b.expandT=(b.expandT||0)-dt; b.retaliateT=(b.retaliateT||0)-dt; b.disengageT=(b.disengageT||0)-dt; b.fenceCd=(b.fenceCd||0)-dt; b.gnCd=(b.gnCd||0)-dt;
   b.regenT=(b.regenT||0)-dt; if(b.regenT<=0 && b.hp<b.max) b.hp=Math.min(b.max, b.hp+9*dt);   // regenerate health like the player
+  b._hireT=(b._hireT||0)-dt;
+  if(b.primary && !b._unfounded && b._hireT<=0){            // team-level WORKER HIRE pulse: runs in EVERY state, so a primary that lives in raid/defend still converts banked scrap into workers (build/trade hires alone stall once the team stops idling at home)
+    b._hireT=2;
+    const tcH=game.deploys.get(b.tcKey), bank=(b.scrap||0)+((tcH&&tcH.store)?(tcH.store.scrap||0):0);
+    if(bank>=WORKER_COST+24) botHireWorker(b);               // keep 24 scrap back so the next trade visit can still fund the 2-rocket breach floor
+  }
   if(b._aboard){ const tr=b._aboard; if(tr.destroyed || tr.riders.indexOf(b)<0){ b._aboard=null; b.flying=false; } else { b.x=tr.x; b.y=tr.y; b.flying=true; b.gunCd-=dt; b.rkCd-=dt; return; } }   // riding the transport heli -> just ride along (the transport drops us near the target)
   if(b.flying && !b._aboard && (!b.copter || b.copter.destroyed)) b.flying=false;              // copter shot down -> drop back to foot (visible, fights normally; no invisible flyer)
   if(b.flying && !b._aboard && b.state!=='trade'){ b.flying=false; if(b.copter){ b.copter.spin=0; b.copter.x=b.x; b.copter.y=b.y; b.copter.vx=0; b.copter.vy=0; } }   // ONLY the trade state flies the minicopter — any other state (a threat interrupting a trade run, etc.) lands at once so a bot is NEVER stuck airborne / invisible mid-combat
@@ -319,7 +325,9 @@ function updateBot(b,dt){
       if(b.primary && (b.scrap||0)>=TRANSPORT.cost && !teamTransport(b.owner) && botFarthestEnemy(b)){ if(buyTransport(b)) bought=true; }   // a base is too far to walk-raid -> get the ferry
       if(!b.weak && b.gun==='pistol' && (b.scrap||0)>=10){ b.scrap-=10; b.gun=(b.shotgun?'shotgun':'rifle'); bought=true; addFloat(b.x,b.y-58,'+'+b.gun,'#cfe0a0'); }   // PROGRESSION: upgrade the starting pistol to a rifle/shotgun (weak teams stay pistol)
       if(b.hard && !b.rifleLaser && b.gun==='rifle' && (b.scrap||0)>=10){ b.scrap-=10; b.rifleLaser=true; bought=true; addFloat(b.x,b.y-58,'+laser','#ff6a6a'); }   // HARD teams grab the rifle LASER SIGHT early (cheap accuracy upgrade, prioritized)
-      while(b.rockets<12 && (b.scrap||0)>=12){ b.scrap-=12; b.rockets++; bought=true; }                      // EXPLOSIVES first — stockpile a real BREACH supply (up to 12), funded by the team's banked scrap, so raids can actually crack a base
+      while(b.rockets<2 && (b.scrap||0)>=12){ b.scrap-=12; b.rockets++; bought=true; }                       // a minimal 2-rocket breach/defense floor comes before anything else
+      if(b.primary && b.rockets>=2){ while(botHireWorker(b)) bought=true; }                                  // WORKERS NEXT — each hire compounds the economy, so hiring outranks stockpiles; loops toward the team cap while scrap lasts
+      while(b.rockets<12 && (b.scrap||0)>=12){ b.scrap-=12; b.rockets++; bought=true; }                      // then the real BREACH stockpile (up to 12), funded by the team's banked scrap, so raids can actually crack a base
       while((b.satchels||0)<4 && (b.scrap||0)>=8){ b.scrap-=8; b.satchels=(b.satchels||0)+1; bought=true; }   // satchels are bought here too (the only source)
       if((b.grenades||0)<2 && (b.scrap||0)>=8){ b.scrap-=8; b.grenades=(b.grenades||0)+1; bought=true; }
       if(b.hard){                                                                                          // HARD teams PRIORITIZE personal protection: body armor + facemask to max, then the rifle laser sight (tighter aim) — bought right after the breach essentials
@@ -329,7 +337,6 @@ function updateBot(b,dt){
       while(b.hard && (b.scrap||0)>=20 && (b.hqm||0)<60){ b.scrap-=14; b.hqm=(b.hqm||0)+10; bought=true; }   // hard bots convert SURPLUS scrap into HQM (multiple per visit) -> they actually armor-plate the whole base
       if((!b.copter||b.copter.destroyed) && !b._aboard && (b.scrap||0)>=MINICOPTER_COST && teamCopterCount(b.owner)<(b.hard?3:2)){   // SURPLUS -> buy an extra team minicopter (a team can field MULTIPLE), AFTER combat essentials so it never starves rockets. Reuses the per-unit copter logic (fly/land/trade/park/wreck)
         b.scrap-=MINICOPTER_COST; b.copter={x:b.x-TILE*2, y:b.y, angle:0, rotor:0, spin:0, vx:0, vy:0, hp:160, max:160, destroyed:false}; bought=true; addFloat(b.x,b.y-46,'+minicopter','#bfe3ff'); }
-      if(b.primary && b.rockets>=2 && botHireWorker(b)) bought=true;                              // surplus scrap (pooled in the TC) -> HIRE an extra worker (capped) — a fast way to grow the economy
       if(bought) addFloat(b.x,b.y-34,'resupplied','#bfe3ff');
       b.tradeDone=true; return; }
     if(b.flying){ const px=b.hx-TILE*4, py=b.hy; if(botFlyTo(b,px,py,dt,46)){ b.flying=false; if(b.copter){ b.copter.spin=0; b.copter.x=b.x; b.copter.y=b.y; } b.tradeDone=false; b.state='return'; } return; }   // fly home, land at the parking spot, then walk in
