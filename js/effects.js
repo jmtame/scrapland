@@ -940,6 +940,7 @@ function drawWorld() {
   drawBullets();
   drawRockets();
   drawMuzzle();
+  drawQuarry();
   drawAirdrop();
   drawParticles();
   drawFlashes();
@@ -1172,6 +1173,160 @@ function buildPalms() {
         (typeof lakeAt === 'function' && lakeAt(x, y))) continue;
     game.palms.push({ x, y, seed: rand(0, 9), desert: true });
   }
+}
+
+/* ---- THE QUARRY: a capturable production monument. Stand on it UNCONTESTED for 8s to take it;
+   it then trickles stone/metal/scrap to the owner unattended until someone takes it back. The
+   periodic income makes it a standing reason for teams to leave their bases and fight in the
+   open. ---- */
+const QUARRY_CAP_T = 8;
+
+function updateQuarry(dt) {
+  const q = game.quarry;
+  if (!q) return;
+  // who is standing on it?
+  const present = new Set();
+  if (!player.dead && !game.ghost && dist2(player.x, player.y, q.x, q.y) < q.r * q.r) {
+    present.add(OWNER);
+  }
+  for (const b of game.enemies) {
+    if (b.dead || b.eliminated || b.flying) continue;
+    if (dist2(b.x, b.y, q.x, q.y) < q.r * q.r) present.add(b.owner);
+  }
+  if (present.size === 1) {
+    const who = [...present][0];
+    if (who !== q.owner) {   // sole non-owner present -> capture progress
+      if (q.capOwner !== who) { q.capOwner = who; q.capT = 0; }
+      q.capT += dt;
+      if (q.capT >= QUARRY_CAP_T) {
+        q.owner = who;
+        q.capT = 0;
+        q.capOwner = null;
+        const label = who === OWNER ? 'YOU' : 'Base ' + ((teamPrimary(who) || { id: -1 }).id + 1);
+        flashTip(who === OWNER ? 'Quarry captured!' : 'Quarry captured by ' + label);
+        game.elims.push({ text: 'QUARRY → ' + label, t: 10 });
+      }
+    } else {
+      q.capT = 0;
+      q.capOwner = null;
+    }
+  } else {
+    q.capT = Math.max(0, q.capT - dt);   // contested or empty -> capture progress drains
+  }
+  if (!q.owner) return;
+  // a dead team can't own it — it goes neutral
+  if (q.owner !== OWNER && !game.enemies.some(b => b.owner === q.owner && b.primary && !b.eliminated)) {
+    q.owner = null;
+    return;
+  }
+  // production runs unattended
+  q.arm += dt;
+  q.payT += dt;
+  if (q.payT >= 6) {
+    q.payT = 0;
+    q.paid++;
+    if (q.owner === OWNER) {
+      game.inv.stone += 10;
+      game.inv.metal += 6;
+      game.inv.scrap += 4;
+    } else {
+      const prim = teamPrimary(q.owner);
+      const tc = prim && game.deploys.get(prim.tcKey);
+      if (tc && tc.store) {
+        tc.store.stone = (tc.store.stone || 0) + 10;
+        tc.store.metal = (tc.store.metal || 0) + 6;
+        tc.store.scrap = (tc.store.scrap || 0) + 4;
+      }
+    }
+    addFloat(q.x, q.y - 44, '+stone +metal +scrap', '#cdd6a3');
+  }
+}
+
+function quarryOwnerCol() {
+  const q = game.quarry;
+  if (!q || !q.owner) return null;
+  if (q.owner === OWNER) return COL.player;
+  const prim = teamPrimary(q.owner);
+  return prim ? prim.col : '#999';
+}
+
+function drawQuarry() {
+  const q = game.quarry;
+  if (!q || !inView(q.x, q.y, 220)) return;
+  // gravel pad + pit
+  ctx.fillStyle = 'rgba(70,62,44,.55)';
+  ctx.beginPath();
+  ctx.arc(q.x, q.y, q.r * 0.66, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#3a3426';
+  ctx.beginPath();
+  ctx.ellipse(q.x - 36, q.y + 26, 44, 24, 0, 0, TAU);
+  ctx.fill();
+  // derrick tower
+  shadow(q.x + 26, q.y + 18, 40, 12);
+  ctx.fillStyle = COL.steelDk;
+  ctx.fillRect(q.x + 8, q.y - 46, 12, 64);
+  ctx.fillStyle = COL.steel;
+  ctx.fillRect(q.x + 4, q.y - 50, 20, 10);
+  // rocking beam arm: animated while producing, parked otherwise
+  const rock = q.owner ? Math.sin(q.arm * 2.4) * 0.35 : -0.18;
+  ctx.save();
+  ctx.translate(q.x + 14, q.y - 44);
+  ctx.rotate(rock);
+  ctx.fillStyle = COL.steelLt;
+  ctx.fillRect(-52, -5, 86, 10);
+  ctx.fillStyle = COL.barrel;
+  ctx.beginPath();
+  ctx.arc(-52, 0, 9, 0, TAU);   // counterweight head
+  ctx.fill();
+  ctx.restore();
+  // owner flag
+  const col = quarryOwnerCol();
+  ctx.fillStyle = COL.woodDk;
+  ctx.fillRect(q.x - 44, q.y - 58, 4, 46);
+  ctx.fillStyle = col || '#6e6a5a';
+  ctx.fillRect(q.x - 40, q.y - 58, 26, 14);
+  // capture progress ring
+  if (q.capT > 0) {
+    ctx.strokeStyle = 'rgba(255,220,120,.85)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, q.r * 0.66, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, q.capT / QUARRY_CAP_T));
+    ctx.stroke();
+  }
+}
+
+function drawQuarryMarker() {
+  // Screen-space: small label/edge chip so the quarry's status reads at a glance.
+  const q = game.quarry;
+  if (!q) return;
+  const sx = (q.x - game.cam.cx) * game.zoom + VW / 2;
+  const sy = (q.y - game.cam.cy) * game.zoom + VH / 2;
+  const m = 54;
+  const col = quarryOwnerCol() || '#b9b39d';
+  ctx.save();
+  if (sx >= m && sx <= VW - m && sy >= m && sy <= VH - m) {
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = col;
+    ctx.font = 'bold 11px "Trebuchet MS",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('QUARRY', sx, sy - 64);
+  } else {
+    const ex = clamp(sx, m, VW - m);
+    const ey = clamp(sy, m, VH - m);
+    ctx.translate(ex, ey);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#26220f';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Q', 0, 4);
+  }
+  ctx.restore();
+  ctx.textAlign = 'left';
 }
 
 function drawAirdrop() {
@@ -1431,6 +1586,7 @@ function render() {
   else drawReticle();
   drawBlasts();
   drawAirdropMarker();
+  drawQuarryMarker();
   drawRaidAlarm();
   if (player.hurt > 0) {
     ctx.fillStyle = 'rgba(150,28,18,' + (player.hurt * 0.5) + ')';

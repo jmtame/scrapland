@@ -362,6 +362,7 @@ function update(dt) {
   updateConvoys(dt);
   updateCrossings(dt);
   updateAirdrop(dt);
+  updateQuarry(dt);
   updateFires(dt);
   updateWrecks(dt);
   updateSatchels(dt);

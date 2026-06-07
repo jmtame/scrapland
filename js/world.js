@@ -380,6 +380,24 @@ function buildMonuments() {
     const nGuards = m.type === 'warehouse' ? 4 : 3;   // armed guards patrol (more at the richer warehouse)
     for (let c = 0; c < nGuards; c++) game.guards.push(spawnGuard(m));
   }
+
+  // THE QUARRY — a capturable monument (no crates/guards of its own): hold it uncontested to own
+  // it, and it trickles resources to the owner until someone takes it back. Listed in
+  // game.monuments so the no-build zone + base-spawn avoidance apply automatically.
+  let qx = WORLD.w * 0.40;
+  let qy = WORLD.h * 0.52;
+  for (let g = 0; g < 10; g++) {
+    const bad = landFactor(qx, qy) < 0.12 || lakeAt(qx, qy) ||
+      (typeof railDist === 'function' && railDist(qx, qy) < 360) ||
+      (typeof pathDist === 'function' && pathDist(qx, qy) < 320) ||
+      (game.shop && dist2(qx, qy, game.shop.x, game.shop.y) < (SAFE_R + 600) * (SAFE_R + 600));
+    if (!bad) break;
+    qx = qx * 0.85 + (WORLD.w / 2) * 0.15 + rand(-500, 500);
+    qy = qy * 0.85 + (WORLD.h / 2) * 0.15 + rand(-400, 400);
+  }
+  const qm = { type: 'quarry', name: 'Quarry', x: qx, y: qy, r: 170 };
+  game.monuments.push(qm);
+  game.quarry = { x: qx, y: qy, r: 240, owner: null, capOwner: null, capT: 0, payT: 0, arm: 0, paid: 0 };
 }
 
 const GUARD = { hp: 64, r: 14, dmg: 8, rof: 0.5, range: 430, detect: 540, speed: 118, leash: 170, bspeed: 1200, spread: 0.06 };
