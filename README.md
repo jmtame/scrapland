@@ -1,10 +1,13 @@
 # SCRAPLAND
 
-A top-down survival game inspired by Rust. Scavenge scrap, build and fortify a
-base, arm up at the trade zone, and outlast rival AI teams that gather, fortify,
-and raid each other across a large, procedurally-built map.
+A top-down survival game inspired by Rust built with Opus 4.8 over a weekend. Scavenge scrap, build and fortify a base, arm up at the trade zone, and outlast rival AI teams that gather, fortify, and raid each other across a large, procedurally-built map.
+
+Features: weather system (rain/fog/day/night), multiple biomes (desert/winter/jungle), animal system, base building, raids, trade zone, monuments.
 
 Runs entirely in the browser — no build step, no dependencies, no server.
+
+<img width="1283" height="1278" alt="Screenshot 2026-06-01 at 7 50 13 AM" src="https://github.com/user-attachments/assets/6ae6d535-1661-47aa-9e25-38f7023b1cce" />
+
 
 ## Play
 
