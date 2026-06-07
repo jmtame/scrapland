@@ -773,15 +773,18 @@ function airdropLoot() {
   return loot;
 }
 
-function spawnAirdrop() {
-  let dropX;
-  let dropY;
-  for (let i = 0; i < 24; i++) {   // NEVER drop in (or right next to) the trade safe zone
-    dropX = rand(WORLD.w * 0.16, WORLD.w * 0.84);
-    dropY = rand(WORLD.h * 0.16, WORLD.h * 0.84);
-    if (!(typeof inSafeZone === 'function' &&
-          (inSafeZone(dropX, dropY) ||
-           (game.shop && dist2(dropX, dropY, game.shop.x, game.shop.y) < (SAFE_R + 160) * (SAFE_R + 160))))) break;
+function spawnAirdrop(atX, atY) {
+  // With coordinates (a thrown SUPPLY SIGNAL), the plane delivers THERE; otherwise random.
+  let dropX = atX;
+  let dropY = atY;
+  if (atX === undefined) {
+    for (let i = 0; i < 24; i++) {   // NEVER drop in (or right next to) the trade safe zone
+      dropX = rand(WORLD.w * 0.16, WORLD.w * 0.84);
+      dropY = rand(WORLD.h * 0.16, WORLD.h * 0.84);
+      if (!(typeof inSafeZone === 'function' &&
+            (inSafeZone(dropX, dropY) ||
+             (game.shop && dist2(dropX, dropY, game.shop.x, game.shop.y) < (SAFE_R + 160) * (SAFE_R + 160))))) break;
+    }
   }
   const fromLeft = Math.random() < 0.5;
   const lead = 1700;   // the plane starts a short lead before the drop point, so the crate falls within seconds and the plane continues off-map
