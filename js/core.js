@@ -85,6 +85,8 @@ addEventListener('keydown', e => {
     if (!player.inCopter) dropPlayerFence();   // place a wood fence (cover) in front of you
   } else if (k === 'q' && !game.buildMode && !player.inCopter) {
     throwGrenade();                            // lob a grenade toward the cursor (2 s fuse)
+  } else if (k === 't' && !game.buildMode && !player.inCopter) {
+    throwSupplySignal();                       // purple smoke at the cursor -> targeted airdrop
   }
   if (!player.inCopter) {
     // Slot keys match on e.code, not e.key: with Shift held (running) '1' arrives as '!', and

@@ -363,6 +363,7 @@ function update(dt) {
   updateCrossings(dt);
   updateAirdrop(dt);
   updateQuarry(dt);
+  updateSignals(dt);
   updateFires(dt);
   updateWrecks(dt);
   updateSatchels(dt);

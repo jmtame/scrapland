@@ -545,6 +545,26 @@ function refreshShopBuys() {
   });
 }
 
+function buySignal() {
+  if ((game.inv.scrap | 0) < 60) {
+    flashTip('Need 60 scrap');
+    return;
+  }
+  game.inv.scrap -= 60;
+  game.inv.signal = (game.inv.signal | 0) + 1;
+  document.getElementById('shop-scrap').textContent = game.inv.scrap | 0;
+  refreshSignalRow();
+  flashTip('Supply signal bought — press T to throw it (everyone will see the drop)');
+}
+
+function refreshSignalRow() {
+  const el = document.getElementById('buy-signal');
+  if (!el) return;
+  el.innerHTML = '<span>Supply signal · targeted airdrop (T)' +
+    ((game.inv.signal | 0) > 0 ? ' ×' + (game.inv.signal | 0) : '') +
+    '</span><span class="sx">60 scrap</span>';
+}
+
 function buyJackhammer() {
   if (game.jackhammer) {
     flashTip('Jackhammer already owned');

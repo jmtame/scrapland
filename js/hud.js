@@ -153,6 +153,15 @@ function buildShopDOM() {
   gr.addEventListener('click', buyGrenade);
   by.appendChild(gr);
 
+  // Supply signal (targeted airdrop).
+  const sg = document.createElement('div');
+  sg.className = 'shop-row';
+  sg.id = 'buy-signal';
+  sg.addEventListener('mousedown', e => e.stopPropagation());
+  sg.addEventListener('click', buySignal);
+  by.appendChild(sg);
+  refreshSignalRow();
+
   // High-quality metal (armored wall upgrades).
   const hq = document.createElement('div');
   hq.className = 'shop-row';

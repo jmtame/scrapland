@@ -941,6 +941,7 @@ function drawWorld() {
   drawRockets();
   drawMuzzle();
   drawQuarry();
+  drawSignal();
   drawAirdrop();
   drawParticles();
   drawFlashes();
@@ -1327,6 +1328,67 @@ function drawQuarryMarker() {
   }
   ctx.restore();
   ctx.textAlign = 'left';
+}
+
+/* ---- supply signal: a shop-bought flare (60 scrap, press T) thrown at the cursor. Purple smoke
+   burns ~6s, then the cargo plane delivers an airdrop ON the smoke. Classic risk/reward: every AI
+   team sees the falling crate too (local race + hard-team map-wide loot runners). ---- */
+function throwSupplySignal() {
+  if (player.dead || player.inCopter || game.buildMode) return;
+  if ((game.inv.signal | 0) <= 0) {
+    flashTip('No supply signal — buy one at the trade zone (60 scrap)');
+    return;
+  }
+  if (game.signal) {
+    flashTip('A supply signal is already burning');
+    return;
+  }
+  const w = screenToWorld(mouse.sx, mouse.sy);
+  const throwR = 700;
+  const d = Math.hypot(w.x - player.x, w.y - player.y);
+  let tx = w.x;
+  let ty = w.y;
+  if (d > throwR) {   // clamp to throwing range, toward the cursor
+    tx = player.x + (w.x - player.x) / d * throwR;
+    ty = player.y + (w.y - player.y) / d * throwR;
+  }
+  if (inSafeZone(tx, ty)) {
+    flashTip('Not in the safe zone');
+    return;
+  }
+  game.inv.signal--;
+  game.signal = { x: tx, y: ty, t: 0, dur: 6, puff: 0, called: false };
+  flashTip('Supply signal out — the drop is coming (everyone saw it)');
+}
+
+function updateSignals(dt) {
+  const s = game.signal;
+  if (!s) return;
+  s.t += dt;
+  s.puff -= dt;
+  if (s.puff <= 0) {   // rising purple smoke
+    s.puff = 0.12;
+    burst(s.x + rand(-8, 8), s.y + rand(-6, 2), '#a96bd4', 3, 60);
+  }
+  // after the burn, call the plane — waits for the sky to be free (one plane/crate at a time)
+  if (s.t >= s.dur && !s.called && !game.plane && !game.airdrop) {
+    spawnAirdrop(s.x, s.y);
+    s.called = true;
+  }
+  if (s.called || s.t > s.dur + 60) game.signal = null;   // delivered (or gave up after 60s of busy sky)
+}
+
+function drawSignal() {
+  const s = game.signal;
+  if (!s || !inView(s.x, s.y, 80)) return;
+  // flare canister + pulsing glow
+  ctx.fillStyle = '#5a2d78';
+  ctx.fillRect(s.x - 3, s.y - 8, 6, 10);
+  const glow = 0.5 + 0.5 * Math.sin(s.t * 9);
+  ctx.fillStyle = 'rgba(190,120,235,' + (0.35 + glow * 0.45) + ')';
+  ctx.beginPath();
+  ctx.arc(s.x, s.y - 10, 6 + glow * 3, 0, TAU);
+  ctx.fill();
 }
 
 function drawAirdrop() {
