@@ -943,6 +943,7 @@ function drawWorld() {
   drawQuarry();
   drawSignal();
   drawAirdrop();
+  drawPatrolHeli();
   drawParticles();
   drawFlashes();
   drawFloats();
@@ -1389,6 +1390,234 @@ function drawSignal() {
   ctx.beginPath();
   ctx.arc(s.x, s.y - 10, 6 + glow * 3, 0, TAU);
   ctx.fill();
+}
+
+/* ---- patrol helicopter: every ~4-7 min an NPC gunship hunts the RICHEST team (most units,
+   biggest base, fattest bank — the snowball leader), strafes its base area for ~22s with HMG
+   bursts, then leaves. Anyone can shoot it down; the strafed team returns fire. A kill drops
+   elite loot at the crash site. Anti-snowball pressure, announced map-wide. ---- */
+const PATROL_HP = 450;   // big teams that focus fire CAN down it (~once per couple of visits) — the crash loot is the reward
+const PATROL_SPEED = 330;
+
+function patrolPickTarget() {
+  let best = null;
+  let bestScore = -1;
+  for (const b of game.enemies) {
+    if (!b.primary || b.eliminated || b._unfounded || !baseAlive(b)) continue;
+    let units = 0;
+    for (const e of game.enemies) {
+      if (e.owner === b.owner && !e.eliminated && !e.dead) units++;
+    }
+    const tc = game.deploys.get(b.tcKey);
+    const bank = tc && tc.store
+      ? (tc.store.wood + tc.store.stone + tc.store.metal + (tc.store.scrap || 0)) : 0;
+    const score = units * 10 + botBaseFloors(b.owner) * 2 + bank * 0.01;
+    if (score > bestScore) { bestScore = score; best = b; }
+  }
+  return best;
+}
+
+function updatePatrolHeli(dt) {
+  game.patrolT = (game.patrolT === undefined ? rand(180, 280) : game.patrolT - dt);
+  if (game.patrolT <= 0 && !game.patrol) {
+    const tgt = patrolPickTarget();
+    game.patrolT = rand(240, 420);
+    if (tgt) {
+      game.patrol = {
+        x: tgt.hx > WORLD.w / 2 ? -200 : WORLD.w + 200,
+        y: clamp(tgt.hy + rand(-600, 600), 200, WORLD.h - 200),
+        owner: tgt.owner, tid: tgt.id, tx: tgt.hx, ty: tgt.hy,
+        hp: PATROL_HP, max: PATROL_HP,
+        rotor: 0, angle: 0, orbitT: 22, orbA: rand(0, TAU), gunCd: 1.2, flash: 0, leaving: false
+      };
+      flashTip('Patrol helicopter inbound!');
+      game.elims.push({ text: 'PATROL HELI hunts Base ' + (tgt.id + 1), t: 10 });
+    }
+  }
+  const p = game.patrol;
+  if (!p) return;
+  p.rotor += dt * 28;
+  p.flash = Math.max(0, p.flash - dt);
+  p.gunCd -= dt;
+  // hunted team already eliminated -> just leave
+  if (!p.leaving && !game.enemies.some(b => b.owner === p.owner && b.primary && !b.eliminated)) {
+    p.leaving = true;
+  }
+  let mx;
+  let my;
+  if (p.leaving) {
+    mx = p.x < WORLD.w / 2 ? -360 : WORLD.w + 360;
+    my = p.y;
+    if (p.x < -320 || p.x > WORLD.w + 320) { game.patrol = null; return; }
+  } else if (dist2(p.x, p.y, p.tx, p.ty) > 460 * 460) {
+    mx = p.tx;   // transit: fly straight at the target base
+    my = p.ty;
+  } else {
+    // on station: orbit the base and strafe
+    p.orbitT -= dt;
+    p.orbA += dt * 0.55;
+    mx = p.tx + Math.cos(p.orbA) * 420;
+    my = p.ty + Math.sin(p.orbA) * 420;
+    if (p.orbitT <= 0) p.leaving = true;
+    if (p.gunCd <= 0) {
+      // strafe: an HMG burst at one unit of the hunted team (or the player, if they are the
+      // hunted "team" stand-in nearby and actually have a base worth punishing)
+      let victim = null;
+      let bd = 760 * 760;
+      for (const e of game.enemies) {
+        if (e.owner !== p.owner || e.dead || e.eliminated || e.flying) continue;
+        const d = dist2(p.x, p.y, e.x, e.y);
+        if (d < bd) { bd = d; victim = e; }
+      }
+      if (victim) {
+        p.gunCd = 1.2;
+        p.flash = 0.12;
+        for (let i = 0; i < 5; i++) {
+          const lead = 0.18 + i * 0.02;
+          const ax = victim.x + (victim.vx || 0) * lead + rand(-26, 26);
+          const ay = victim.y + (victim.vy || 0) * lead + rand(-26, 26);
+          const ang = Math.atan2(ay - p.y, ax - p.x);
+          const sp = 900;
+          game.bullets.push({
+            x: p.x, y: p.y, px: p.x, py: p.y,
+            vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+            life: Math.hypot(ax - p.x, ay - p.y) / sp + 0.1,
+            dmg: 9, from: 'patrol', enemy: true, col: COL.hmgTracer
+          });
+        }
+      }
+    }
+  }
+  // The hunted team fires FLAK back (own projectile lane: aimed UP at an aircraft, it ignores
+  // ground clutter — regular bullets died on the defenders' own walls, so the heli kept escaping
+  // at single-digit HP). Led shots; per-shot damage is low, so only a BIG team's massed fire
+  // downs it inside one visit — exactly the anti-snowball dial.
+  p.flak = p.flak || [];
+  for (const e of game.enemies) {
+    if (e.owner !== p.owner || e.dead || e.eliminated || e.flying) continue;
+    if ((e._aaCd = (e._aaCd || 0) - dt) <= 0 && dist2(p.x, p.y, e.x, e.y) < 720 * 720) {
+      e._aaCd = 1.0;
+      const flight = Math.hypot(p.x - e.x, p.y - e.y) / 1100;
+      const ax = p.x + Math.cos(p.angle) * (p.spd || 0) * flight;
+      const ay = p.y + Math.sin(p.angle) * (p.spd || 0) * flight;
+      const ang = Math.atan2(ay - e.y, ax - e.x) + rand(-0.07, 0.07);
+      e.angle = ang;   // they visibly aim skyward at it
+      p.flak.push({ x: e.x, y: e.y, px: e.x, py: e.y,
+                    vx: Math.cos(ang) * 1100, vy: Math.sin(ang) * 1100, life: 0.7 });
+    }
+  }
+  for (let i = p.flak.length - 1; i >= 0; i--) {
+    const f = p.flak[i];
+    f.px = f.x;
+    f.py = f.y;
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.life -= dt;
+    if (ptSeg(p.x, p.y, f.px, f.py, f.x, f.y) < 40) {
+      p.hp -= 6;
+      burst(f.x, f.y, COL.steelLt, 3, 120);
+      if (p.hp <= 0) { patrolCrash(p); return; }
+      p.flak.splice(i, 1);
+    } else if (f.life <= 0) {
+      p.flak.splice(i, 1);
+    }
+  }
+  const want = Math.atan2(my - p.y, mx - p.x);
+  p.angle += angDiff(p.angle, want) * Math.min(1, dt * 3);
+  const d = Math.hypot(mx - p.x, my - p.y) || 1;
+  const sp = Math.min(PATROL_SPEED, PATROL_SPEED * d / 300);
+  p.spd = sp;   // current speed, used by defenders to lead their shots
+  p.x += Math.cos(p.angle) * sp * dt;
+  p.y += Math.sin(p.angle) * sp * dt;
+}
+
+// Crash payout: elite loot where it falls (rockets + satchels mark it as a hard-team loot-run prize).
+function patrolCrash(p) {
+  burst(p.x, p.y, COL.explosion, 40, 360);
+  burst(p.x, p.y, COL.rocketHot, 24, 280);
+  game.scorch.push({ x: p.x, y: p.y, r: 64 });
+  for (let i = 0, n = randi(4, 6); i < n; i++) addLoot(p.x, p.y, 'rocket', 1);
+  for (let i = 0, n = randi(2, 3); i < n; i++) addLoot(p.x, p.y, 'satchel', 1);
+  addLoot(p.x, p.y, 'ammo', randi(100, 180));
+  spillStack(p.x, p.y, 'scrap', randi(80, 150));
+  spillStack(p.x, p.y, 'metal', randi(50, 90));
+  flashTip('Patrol helicopter DOWN!');
+  game.elims.push({ text: 'PATROL HELI DOWN', t: 12 });
+  game.patrol = null;
+}
+
+function drawPatrolHeli() {
+  const p = game.patrol;
+  if (!p) return;
+  // flak tracers (drawn even when the heli itself is off-screen)
+  if (p.flak && p.flak.length) {
+    ctx.strokeStyle = 'rgba(255,233,163,.8)';
+    ctx.lineWidth = 2;
+    for (const f of p.flak) {
+      if (!inView(f.x, f.y, 60)) continue;
+      ctx.beginPath();
+      ctx.moveTo(f.px, f.py);
+      ctx.lineTo(f.x, f.y);
+      ctx.stroke();
+    }
+  }
+  if (!inView(p.x, p.y, 140)) return;
+  shadow(p.x + 26, p.y + 30, 52, 14);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  // tail boom + fin
+  ctx.fillStyle = COL.copterDk;
+  ctx.fillRect(-52, -4, 34, 8);
+  ctx.fillRect(-56, -12, 8, 24);
+  // hull
+  ctx.fillStyle = '#3c4435';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 30, 15, 0, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = COL.copterDk;
+  ctx.beginPath();
+  ctx.ellipse(-6, 0, 22, 12, 0, 0, TAU);
+  ctx.fill();
+  // canopy
+  ctx.fillStyle = COL.glass;
+  ctx.beginPath();
+  ctx.ellipse(14, 0, 12, 8, 0, 0, TAU);
+  ctx.fill();
+  // stub wings (rocket pods)
+  ctx.fillStyle = COL.steelDk;
+  ctx.fillRect(-10, -24, 16, 8);
+  ctx.fillRect(-10, 16, 16, 8);
+  // muzzle flash while strafing
+  if (p.flash > 0) {
+    ctx.fillStyle = COL.flash;
+    ctx.beginPath();
+    ctx.arc(26, 0, 7, 0, TAU);
+    ctx.fill();
+  }
+  // main rotor (spinning blur)
+  ctx.strokeStyle = 'rgba(20,22,16,.55)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 56, 56 * 0.32, 0, p.rotor % TAU, (p.rotor % TAU) + 4.4);
+  ctx.stroke();
+  ctx.restore();
+  // hp bar when damaged
+  if (p.hp < p.max) {
+    const frac = Math.max(0, p.hp / p.max);
+    ctx.fillStyle = 'rgba(10,10,8,.6)';
+    ctx.fillRect(p.x - 30, p.y - 44, 60, 6);
+    ctx.fillStyle = frac > 0.4 ? '#9ad06a' : '#d9694f';
+    ctx.fillRect(p.x - 29, p.y - 43, 58 * frac, 4);
+  }
+  // red beacon
+  const blink = (p.rotor % 1.6) < 0.8;
+  if (blink) {
+    ctx.fillStyle = '#ff4a3a';
+    ctx.beginPath();
+    ctx.arc(p.x - 18, p.y - 14, 3, 0, TAU);
+    ctx.fill();
+  }
 }
 
 function drawAirdrop() {

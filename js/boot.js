@@ -69,6 +69,8 @@ function loop(now) {
       game.airdrop = null;
       game.airdropT = 150;
       game.signal = null;
+      game.patrol = null;
+      game.patrolT = undefined;
       game.aggressor = -1;
       game.aggressorOwner = null;
       game.aggroT = 0;

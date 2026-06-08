@@ -364,6 +364,7 @@ function update(dt) {
   updateAirdrop(dt);
   updateQuarry(dt);
   updateSignals(dt);
+  updatePatrolHeli(dt);
   updateFires(dt);
   updateWrecks(dt);
   updateSatchels(dt);
