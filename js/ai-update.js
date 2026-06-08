@@ -1465,8 +1465,17 @@ function updateBot(b, dt) {
       b._qRun = null;
     } else {
       b._act = 'quarry';
+      // FIGHT for it: a rival contesting the quarry is shot on sight. A quarry runner isn't an
+      // assigned defender, so the normal proportional-defense interrupt never fires out here — two
+      // rivals would otherwise just stand on the pad staring at each other. HOLD the pad and fire
+      // (don't strafe off it like botCombatStep would) so the contest stays ON the objective.
+      const foe = th || botThreat(b) || botNearThreat(b);
+      if (foe) {
+        b.angle += angDiff(b.angle, Math.atan2(foe.y - b.y, foe.x - b.x)) * Math.min(1, dt * 10);
+        botShoot(b, foe.x, foe.y);
+      }
       if (Math.hypot(q.x - b.x, q.y - b.y) > q.r * 0.5) {
-        botGoto(b, q.x, q.y, 170, dt);
+        botGoto(b, q.x, q.y, 170, dt);   // drift back toward the pad if knocked off
       }
       return;
     }

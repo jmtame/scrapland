@@ -384,20 +384,35 @@ function buildMonuments() {
   // THE QUARRY — a capturable monument (no crates/guards of its own): hold it uncontested to own
   // it, and it trickles resources to the owner until someone takes it back. Listed in
   // game.monuments so the no-build zone + base-spawn avoidance apply automatically.
+  const QUARRY_CAP_R = 240;
+  // The capture footprint must clear the trade safe zone entirely (not just the centre), with a
+  // margin, so a captor never stands inside the no-combat shop zone.
+  const minShopDist = SAFE_R + QUARRY_CAP_R + 700;
   let qx = WORLD.w * 0.40;
   let qy = WORLD.h * 0.52;
-  for (let g = 0; g < 10; g++) {
-    const bad = landFactor(qx, qy) < 0.12 || lakeAt(qx, qy) ||
-      (typeof railDist === 'function' && railDist(qx, qy) < 360) ||
-      (typeof pathDist === 'function' && pathDist(qx, qy) < 320) ||
-      (game.shop && dist2(qx, qy, game.shop.x, game.shop.y) < (SAFE_R + 600) * (SAFE_R + 600));
-    if (!bad) break;
-    qx = qx * 0.85 + (WORLD.w / 2) * 0.15 + rand(-500, 500);
-    qy = qy * 0.85 + (WORLD.h / 2) * 0.15 + rand(-400, 400);
+  // Scan a ring of candidate angles at a healthy radius from the shop, expanding outward, and take
+  // the first spot on solid land clear of water / rails / roads / safe zone. (The old version
+  // nudged toward map-centre — i.e. toward the shop — so a too-close quarry only got worse.)
+  // Placement is DETERMINISTIC (no rand): the world is already seeded, and consuming no RNG here
+  // keeps the shared random stream identical for everything spawned afterward.
+  outer:
+  for (let ring = 0; ring < 6; ring++) {
+    const radius = minShopDist + ring * 700;
+    for (let s = 0; s < 16; s++) {
+      const a = s * (TAU / 16);
+      const cx = game.shop.x + Math.cos(a) * radius;
+      const cy = game.shop.y + Math.sin(a) * radius;
+      if (cx < 600 || cy < 600 || cx > WORLD.w - 600 || cy > WORLD.h - 600) continue;
+      const bad = landFactor(cx, cy) < 0.12 || lakeAt(cx, cy) ||
+        (typeof railDist === 'function' && railDist(cx, cy) < 360) ||
+        (typeof pathDist === 'function' && pathDist(cx, cy) < 320) ||
+        dist2(cx, cy, game.shop.x, game.shop.y) < minShopDist * minShopDist;
+      if (!bad) { qx = cx; qy = cy; break outer; }
+    }
   }
   const qm = { type: 'quarry', name: 'Quarry', x: qx, y: qy, r: 170 };
   game.monuments.push(qm);
-  game.quarry = { x: qx, y: qy, r: 240, owner: null, capOwner: null, capT: 0, payT: 0, arm: 0, paid: 0 };
+  game.quarry = { x: qx, y: qy, r: QUARRY_CAP_R, owner: null, capOwner: null, capT: 0, payT: 0, arm: 0, paid: 0 };
 }
 
 const GUARD = { hp: 64, r: 14, dmg: 8, rof: 0.5, range: 430, detect: 540, speed: 118, leash: 170, bspeed: 1200, spread: 0.06 };
