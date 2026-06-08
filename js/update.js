@@ -365,6 +365,7 @@ function update(dt) {
   updateQuarry(dt);
   updateSignals(dt);
   updatePatrolHeli(dt);
+  updateLockedCrate(dt);
   updateFires(dt);
   updateWrecks(dt);
   updateSatchels(dt);
