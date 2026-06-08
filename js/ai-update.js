@@ -309,6 +309,25 @@ function updateEnemies(dt) {
           }
         }
       }
+
+      // ---- QUARRY runs: while the quarry isn't OURS, periodically send one free unit to take
+      // it (capture needs 8s of uncontested presence). Hard teams contest it more often. ----
+      if (game.quarry && game.quarry.owner !== ow && (game.t || 0) > (st._qCd || 0) &&
+          !units.some(u => u._qRun)) {
+        const q = game.quarry;
+        const free = units.filter(u =>
+          !u.primary && !u._defDuty && !u._buildDuty && !u._rocketer && !u._monRun &&
+          !u._lootRun && u.state === 'gather');
+        if (free.length) {
+          const runner = free.sort((p, w) =>
+            dist2(p.x, p.y, q.x, q.y) - dist2(w.x, w.y, q.x, q.y))[0];
+          const trek = Math.hypot(q.x - runner.x, q.y - runner.y);
+          if (trek < 5200) {
+            runner._qRun = { until: (game.t || 0) + (trek / BOT_SPEED) * 1.8 + 25 };
+            st._qCd = (game.t || 0) + (units[0].hard ? 90 : 150);
+          }
+        }
+      }
     }
   }
 
@@ -1436,6 +1455,31 @@ function updateBot(b, dt) {
 
   // (Bank-when-full / go-buy-rockets / launch-raid are decided by the committed PLANNER above —
   // the gather handler PURELY gathers: loot interrupt, airdrop, monument run, node harvest.)
+
+  // QUARRY RUN (assigned by the team pass): stand on the quarry until it flips to ours — the
+  // capture clock needs 8s of uncontested presence. Deadline-bounded; contests resolve through
+  // normal threat reactions.
+  if (b._qRun) {
+    const q = game.quarry;
+    if (!q || q.owner === b.owner || (game.t || 0) > b._qRun.until) {
+      b._qRun = null;
+    } else {
+      b._act = 'quarry';
+      // FIGHT for it: a rival contesting the quarry is shot on sight. A quarry runner isn't an
+      // assigned defender, so the normal proportional-defense interrupt never fires out here — two
+      // rivals would otherwise just stand on the pad staring at each other. HOLD the pad and fire
+      // (don't strafe off it like botCombatStep would) so the contest stays ON the objective.
+      const foe = th || botThreat(b) || botNearThreat(b);
+      if (foe) {
+        b.angle += angDiff(b.angle, Math.atan2(foe.y - b.y, foe.x - b.x)) * Math.min(1, dt * 10);
+        botShoot(b, foe.x, foe.y);
+      }
+      if (Math.hypot(q.x - b.x, q.y - b.y) > q.r * 0.5) {
+        botGoto(b, q.x, q.y, 170, dt);   // drift back toward the pad if knocked off
+      }
+      return;
+    }
+  }
 
   // HARD-team LOOT RUN (assigned by the team pass): trek to a far airdrop / rich pile, then hand
   // off to the normal race/pickup logic on arrival. Committed + deadline-bounded, like a monument
