@@ -275,7 +275,9 @@ function updateEnemies(dt) {
       if (units.length && units[0].hard && (game.t || 0) > (st._lootCd || 0) &&
           !units.some(u => u._lootRun)) {
         let prize = null;
-        if (game.airdrop) {
+        if (game.lockedCrate) {   // the locked crate outranks everything — attended hack + rich spill
+          prize = { x: game.lockedCrate.x, y: game.lockedCrate.y, kind: 'crate' };
+        } else if (game.airdrop) {
           prize = { x: game.airdrop.x, y: game.airdrop.gy, kind: 'airdrop' };
         } else if (game.loot) {
           for (const L of game.loot) {
@@ -300,9 +302,10 @@ function updateEnemies(dt) {
             const trek = Math.hypot(prize.x - runner.x, prize.y - runner.y);
             // local prizes are handled by the normal race/pickup logic — only send for FAR ones,
             // and skip marathon treks (the prize is stale/contested long before a cross-map walk)
-            if (trek > (prize.kind === 'airdrop' ? 2400 : 520) && trek < 4500) {
-              // real paths wind around terrain and combat interruptions — budget ~1.8x straight-line
-              prize.until = (game.t || 0) + (trek / BOT_SPEED) * 1.8 + 20;
+            if (trek > (prize.kind === 'pile' ? 520 : 2400) && trek < 4500) {
+              // real paths wind around terrain and combat interruptions — budget ~1.8x straight-line;
+              // a crate run also has to ATTEND the hack, so it gets the full unlock on top
+              prize.until = (game.t || 0) + (trek / BOT_SPEED) * 1.8 + (prize.kind === 'crate' ? 170 : 20);
               runner._lootRun = prize;
               st._lootCd = (game.t || 0) + 45;
             }
@@ -1526,6 +1529,20 @@ function updateBot(b, dt) {
   if (b._lootRun) {
     const run = b._lootRun;
     const runDist = Math.hypot(run.x - b.x, run.y - b.y);
+    if (run.kind === 'crate') {
+      // crate runs HOLD at the crate (the hack only ticks while attended); the run ends when the
+      // crate opens/vanishes (spill -> native pickup takes over) or the deadline expires
+      if (!game.lockedCrate || (game.t || 0) > run.until) {
+        b._lootRun = null;
+      } else if (runDist > 90) {
+        b._act = 'loot';
+        botGoto(b, run.x, run.y, 170, dt);
+        return;
+      } else {
+        b._act = 'loot';   // standing at the crate, hacking
+        return;
+      }
+    }
     const arrived = run.kind === 'airdrop'
       ? (runDist < 2200 && game.airdrop) || (!game.airdrop && runDist < 480)   // crate in local race range (or already cracked -> walk onto the spill)
       : runDist < 480;                                                          // pile inside botNearestLoot's pickup radius
@@ -1578,6 +1595,18 @@ function updateBot(b, dt) {
         return;
       }
       botGoto(b, tx, ty, 165, dt);   // else close in (and wait under a still-falling crate)
+      return;
+    }
+  }
+  // Locked crate event: nearby units converge and ATTEND the hack (builders stay home). Rival
+  // attendees meet inside REACT_R, so the fight over the crate emerges from normal threat
+  // reactions — no special combat code.
+  if (game.lockedCrate && !b._buildDuty) {
+    const c = game.lockedCrate;
+    const dCrate = Math.hypot(c.x - b.x, c.y - b.y);
+    if (dCrate < 1600) {
+      b._act = 'crate';
+      if (dCrate > 90) botGoto(b, c.x, c.y, 165, dt);
       return;
     }
   }

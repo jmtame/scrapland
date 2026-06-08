@@ -71,6 +71,8 @@ function loop(now) {
       game.signal = null;
       game.patrol = null;
       game.patrolT = undefined;
+      game.lockedCrate = null;
+      game.crateT = undefined;
       game.aggressor = -1;
       game.aggressorOwner = null;
       game.aggroT = 0;
