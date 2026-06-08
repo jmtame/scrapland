@@ -328,6 +328,45 @@ function updateEnemies(dt) {
           }
         }
       }
+
+      // ---- SUPPLY DROPS (hard teams): the primary spends surplus scrap on a supply signal and
+      // calls a drop NEAR HOME — its own units are closest, so it usually wins the crate, but every
+      // team sees it land (the existing airdrop race/pickup logic does the collecting). One signal
+      // exists at a time (shared with the player), so only fire when the sky + flare are free. ----
+      const SIGNAL_COST = 60;
+      if (units.length && units[0].hard && !game.signal && !game.plane && !game.airdrop &&
+          (game.t || 0) > (st._sigCd || 0)) {
+        const prim = teamPrimary(ow);
+        const tc = prim ? game.deploys.get(prim.tcKey) : null;
+        const bank = prim ? (prim.scrap || 0) + ((tc && tc.store) ? (tc.store.scrap || 0) : 0) : 0;
+        if (prim && bank >= SIGNAL_COST + 60) {   // keep a buffer so a drop never starves rockets/hiring
+          let sx = 0;
+          let sy = 0;
+          let found = false;
+          for (let a = 0; a < 8 && !found; a++) {   // a clear spot just outside the base, on land, off the safe zone
+            const ang = a * (TAU / 8);
+            const cx = prim.hx + Math.cos(ang) * 620;
+            const cy = prim.hy + Math.sin(ang) * 620;
+            if (cx < 300 || cy < 300 || cx > WORLD.w - 300 || cy > WORLD.h - 300) continue;
+            if (typeof inSafeZone === 'function' && inSafeZone(cx, cy)) continue;
+            if (typeof onLand === 'function' && !onLand(cx, cy)) continue;
+            if (typeof lakeAt === 'function' && lakeAt(cx, cy)) continue;
+            sx = cx;
+            sy = cy;
+            found = true;
+          }
+          if (found) {
+            let pay = SIGNAL_COST;   // spend from the primary's pocket first, then the TC bank
+            const fromB = Math.min(prim.scrap || 0, pay);
+            prim.scrap = (prim.scrap || 0) - fromB;
+            pay -= fromB;
+            if (pay > 0 && tc && tc.store) tc.store.scrap = Math.max(0, (tc.store.scrap || 0) - pay);
+            game.signal = { x: sx, y: sy, t: 0, dur: 6, puff: 0, called: false };
+            st._sigCd = (game.t || 0) + rand(150, 240);
+            if (typeof addFloat === 'function') addFloat(prim.hx, prim.hy - 40, 'supply signal!', '#c9a0ff');
+          }
+        }
+      }
     }
   }
 
