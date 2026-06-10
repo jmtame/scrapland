@@ -104,13 +104,14 @@ export function makeUi(S, view, cam, lighting) {
     drawScreen(ctx, dt) {
       const VW = view.VW, VH = view.VH;
       const t = S.t;
-      // vignette
-      const dark = 1 - lighting.lightLevel();
-      const vg = ctx.createRadialGradient(VW / 2, VH / 2, 0.34 * Math.min(VW, VH), VW / 2, VH / 2, 0.72 * Math.max(VW, VH));
-      vg.addColorStop(0, 'rgba(8,7,5,0)');
-      vg.addColorStop(1, `rgba(8,7,5,${0.26 + dark * 0.2})`);
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, VW, VH);
+      // vignette (gentle; none at all in map view)
+      if (!view.godView) {
+        const vg = ctx.createRadialGradient(VW / 2, VH / 2, 0.34 * Math.min(VW, VH), VW / 2, VH / 2, 0.72 * Math.max(VW, VH));
+        vg.addColorStop(0, 'rgba(8,7,5,0)');
+        vg.addColorStop(1, 'rgba(8,7,5,0.16)');
+        ctx.fillStyle = vg;
+        ctx.fillRect(0, 0, VW, VH);
+      }
       // film grain (subtle)
       if (!grain) makeGrain();
       ctx.globalAlpha = 0.05;

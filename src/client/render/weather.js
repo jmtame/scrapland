@@ -100,8 +100,9 @@ export function makeWeather(S, view, cam) {
       const rainAmt = smooth01((t - (1 / 3 - bl)) / (2 * bl)) * (1 - snowAmt);
       const rI = W.rain * rainAmt, sI = W.rain * snowAmt;
       const VW = view.VW, VH = view.VH;
+      const tintScale = view.godView ? 0 : 1; // map view stays fully readable
       if (sI > 0.02) {
-        ctx.fillStyle = `rgba(210,224,238,${sI * 0.16})`;
+        ctx.fillStyle = `rgba(210,224,238,${sI * 0.16 * tintScale})`;
         ctx.fillRect(0, 0, VW, VH);
         ctx.fillStyle = '#f4f8fc';
         for (const f of flakes) {
@@ -114,7 +115,7 @@ export function makeWeather(S, view, cam) {
         ctx.globalAlpha = 1;
       }
       if (rI > 0.02) {
-        ctx.fillStyle = `rgba(26,36,54,${rI * 0.32})`;
+        ctx.fillStyle = `rgba(26,36,54,${rI * 0.16 * tintScale})`;
         ctx.fillRect(0, 0, VW, VH);
         const slant = 0.24 + S.wind * 0.05;
         const sn = Math.sin(slant), cs = Math.cos(slant);

@@ -5646,7 +5646,7 @@
     if (!u.ally && team) {
       if (brain.breach) return true;
       if (brain.damaged && totalWood(S2, u) >= 12) return true;
-      if (u.rocketer && u.rockets < 8 && u.role !== "turtle" && (u.scrap >= 12 || carried >= 100 || tcScrap(S2, u) >= 24)) return true;
+      if (u.rocketer && u.rockets < 8 && u.role !== "turtle" && S2.t >= (u.tradeCd || 0) && (u.scrap >= 12 || carried >= 100 || tcScrap(S2, u) >= 24)) return true;
       if (restockWanted(S2, u, brain)) return true;
       if (raidWanted(S2, u, brain)) return true;
     }
@@ -5655,6 +5655,7 @@
   }
   function restockWanted(S2, u, brain) {
     if (u.ally || u.role === "turtle") return false;
+    if (S2.t < (u.tradeCd || 0)) return false;
     if (u.rockets >= (u.primary ? 12 : 6)) return false;
     const carried = u.inv.wood + u.inv.stone + u.inv.metal;
     const funds = u.scrap >= 24 || carried >= 120 || u.primary && tcScrap(S2, u) >= 48;
@@ -5675,7 +5676,7 @@
       if (breach && totalWood(S2, u) < 40) return "gather";
       const homeD = dist(u.x, u.y, u.hx, u.hy);
       if (breach || brain.damaged && totalWood(S2, u) >= 12) return homeD > 180 ? "return" : "gather";
-      if (u.rocketer && u.rockets < 8 && u.role !== "turtle" && (u.scrap >= 12 || carried >= 100 || tcScrap(S2, u) >= 24)) return "trade";
+      if (u.rocketer && u.rockets < 8 && u.role !== "turtle" && S2.t >= (u.tradeCd || 0) && (u.scrap >= 12 || carried >= 100 || tcScrap(S2, u) >= 24)) return "trade";
       if (u.scrap > 40 || carried >= AI.GATHER_LOAD) return "return";
       if (restockWanted(S2, u, brain)) return "trade";
       if (raidWanted(S2, u, brain)) {
@@ -6152,7 +6153,7 @@
       u.state = "return";
       return;
     }
-    const fan = u.id >= 0 ? u.id : 3;
+    const fan = (u.id >= 0 ? u.id : 3) + (u.tradeJitter || 0);
     const fx = shop.x + Math.cos(fan * 2.39996) * SAFE_R * 0.34;
     const fy = shop.y + Math.sin(fan * 2.39996) * SAFE_R * 0.34;
     if (!u.tradeDone) {
@@ -6165,6 +6166,8 @@
         }
         const st = goto(S2, u, fx, fy, dt, { arrive: 30 });
         if (st === "stuck") {
+          u.tradeCd = S2.t + 20;
+          u.tradeJitter = (u.tradeJitter || 0) + 1;
           u.state = "return";
         }
         return;
@@ -7634,6 +7637,7 @@
     return {
       lightLevel,
       draw(ctx) {
+        if (view2.godView) return;
         const light = lightLevel();
         const dark = 1 - light;
         if (dark < 0.04) return;
@@ -7644,15 +7648,15 @@
         }
         const duskiness = Math.sin(Math.min(1, dark) * Math.PI);
         c.globalCompositeOperation = "source-over";
-        const nightA = dark * 0.62;
-        c.fillStyle = `rgba(6,11,28,${nightA})`;
+        const nightA = Math.min(0.08, dark * 0.09);
+        c.fillStyle = `rgba(12,18,34,${nightA})`;
         c.fillRect(0, 0, w, h);
         if (duskiness > 0.1) {
-          c.fillStyle = `rgba(140,72,24,${duskiness * 0.1})`;
+          c.fillStyle = `rgba(150,82,30,${duskiness * 0.05})`;
           c.fillRect(0, 0, w, h);
         }
         c.globalCompositeOperation = "destination-out";
-        const lit = Math.min(1, dark * 1.6);
+        const lit = Math.min(1, dark * 1.2);
         for (const f of S2.fires) addLight(f.x, f.y, 150 + Math.sin(S2.t * 9 + f.x) * 14, 0.85 * lit);
         for (const wreck of S2.wrecks) addLight(wreck.x, wreck.y, 120, 0.7 * lit);
         if (S2.muzzle) addLight(S2.muzzle.x, S2.muzzle.y, 130, 0.8 * lit);
@@ -7777,8 +7781,9 @@
         const rainAmt = smooth01((t - (1 / 3 - bl)) / (2 * bl)) * (1 - snowAmt);
         const rI = W.rain * rainAmt, sI = W.rain * snowAmt;
         const VW = view2.VW, VH = view2.VH;
+        const tintScale = view2.godView ? 0 : 1;
         if (sI > 0.02) {
-          ctx.fillStyle = `rgba(210,224,238,${sI * 0.16})`;
+          ctx.fillStyle = `rgba(210,224,238,${sI * 0.16 * tintScale})`;
           ctx.fillRect(0, 0, VW, VH);
           ctx.fillStyle = "#f4f8fc";
           for (const f of flakes) {
@@ -7793,7 +7798,7 @@
           ctx.globalAlpha = 1;
         }
         if (rI > 0.02) {
-          ctx.fillStyle = `rgba(26,36,54,${rI * 0.32})`;
+          ctx.fillStyle = `rgba(26,36,54,${rI * 0.16 * tintScale})`;
           ctx.fillRect(0, 0, VW, VH);
           const slant = 0.24 + S2.wind * 0.05;
           const sn = Math.sin(slant), cs = Math.cos(slant);
@@ -9925,12 +9930,13 @@
       drawScreen(ctx, dt) {
         const VW = view2.VW, VH = view2.VH;
         const t = S2.t;
-        const dark = 1 - lighting.lightLevel();
-        const vg = ctx.createRadialGradient(VW / 2, VH / 2, 0.34 * Math.min(VW, VH), VW / 2, VH / 2, 0.72 * Math.max(VW, VH));
-        vg.addColorStop(0, "rgba(8,7,5,0)");
-        vg.addColorStop(1, `rgba(8,7,5,${0.26 + dark * 0.2})`);
-        ctx.fillStyle = vg;
-        ctx.fillRect(0, 0, VW, VH);
+        if (!view2.godView) {
+          const vg = ctx.createRadialGradient(VW / 2, VH / 2, 0.34 * Math.min(VW, VH), VW / 2, VH / 2, 0.72 * Math.max(VW, VH));
+          vg.addColorStop(0, "rgba(8,7,5,0)");
+          vg.addColorStop(1, "rgba(8,7,5,0.16)");
+          ctx.fillStyle = vg;
+          ctx.fillRect(0, 0, VW, VH);
+        }
         if (!grain) makeGrain();
         ctx.globalAlpha = 0.05;
         ctx.globalCompositeOperation = "overlay";

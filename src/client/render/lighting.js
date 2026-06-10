@@ -25,24 +25,26 @@ export function makeLighting(S, view, cam) {
   return {
     lightLevel,
     draw(ctx) {
+      // Night mode removed by request: days roll into a barely-tinted dusk
+      // (≤ 8% alpha) and the map view is never tinted at all.
+      if (view.godView) return;
       const light = lightLevel();
       const dark = 1 - light;
       if (dark < 0.04) return;
       const w = Math.ceil(view.VW / 2), h = Math.ceil(view.VH / 2);
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-      // ambient darkness — deep blue night, warm rim at dusk
-      const duskiness = Math.sin(Math.min(1, dark) * Math.PI); // peaks mid-transition
+      const duskiness = Math.sin(Math.min(1, dark) * Math.PI);
       c.globalCompositeOperation = 'source-over';
-      const nightA = dark * 0.62;
-      c.fillStyle = `rgba(6,11,28,${nightA})`;
+      const nightA = Math.min(0.08, dark * 0.09);
+      c.fillStyle = `rgba(12,18,34,${nightA})`;
       c.fillRect(0, 0, w, h);
       if (duskiness > 0.1) {
-        c.fillStyle = `rgba(140,72,24,${duskiness * 0.10})`;
+        c.fillStyle = `rgba(150,82,30,${duskiness * 0.05})`;
         c.fillRect(0, 0, w, h);
       }
       // punch lights
       c.globalCompositeOperation = 'destination-out';
-      const lit = Math.min(1, dark * 1.6);
+      const lit = Math.min(1, dark * 1.2);
       for (const f of S.fires) addLight(f.x, f.y, 150 + Math.sin(S.t * 9 + f.x) * 14, 0.85 * lit);
       for (const wreck of S.wrecks) addLight(wreck.x, wreck.y, 120, 0.7 * lit);
       if (S.muzzle) addLight(S.muzzle.x, S.muzzle.y, 130, 0.8 * lit);

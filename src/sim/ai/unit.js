@@ -225,7 +225,7 @@ function gatherDone(S, u, team, brain) {
     if (brain.breach) return true;
     if (brain.damaged && totalWood(S, u) >= 12) return true;
     // rocketer arming
-    if (u.rocketer && u.rockets < 8 && u.role !== 'turtle' && (u.scrap >= 12 || carried >= 100 || tcScrap(S, u) >= 24)) return true;
+    if (u.rocketer && u.rockets < 8 && u.role !== 'turtle' && S.t >= (u.tradeCd || 0) && (u.scrap >= 12 || carried >= 100 || tcScrap(S, u) >= 24)) return true;
     // restock
     if (restockWanted(S, u, brain)) return true;
     // raid
@@ -237,6 +237,7 @@ function gatherDone(S, u, team, brain) {
 
 function restockWanted(S, u, brain) {
   if (u.ally || u.role === 'turtle') return false;
+  if (S.t < (u.tradeCd || 0)) return false;
   if (u.rockets >= (u.primary ? 12 : 6)) return false;
   const carried = u.inv.wood + u.inv.stone + u.inv.metal;
   const funds = u.scrap >= 24 || carried >= 120 || (u.primary && tcScrap(S, u) >= 48);
@@ -259,7 +260,7 @@ function plan(S, u, team, brain) {
     if (breach && totalWood(S, u) < 40) return 'gather';
     const homeD = dist(u.x, u.y, u.hx, u.hy);
     if (breach || (brain.damaged && totalWood(S, u) >= 12)) return homeD > 180 ? 'return' : 'gather';
-    if (u.rocketer && u.rockets < 8 && u.role !== 'turtle' && (u.scrap >= 12 || carried >= 100 || tcScrap(S, u) >= 24)) return 'trade';
+    if (u.rocketer && u.rockets < 8 && u.role !== 'turtle' && S.t >= (u.tradeCd || 0) && (u.scrap >= 12 || carried >= 100 || tcScrap(S, u) >= 24)) return 'trade';
     if (u.scrap > 40 || carried >= AI.GATHER_LOAD) return 'return';
     if (restockWanted(S, u, brain)) return 'trade';
     if (raidWanted(S, u, brain)) {
@@ -662,7 +663,7 @@ function updateTrade(S, u, team, brain, dt) {
   u.act = 'trade';
   const shop = S.world.shop;
   if (!shop) { u.state = 'return'; return; }
-  const fan = u.id >= 0 ? u.id : 3;
+  const fan = (u.id >= 0 ? u.id : 3) + (u.tradeJitter || 0);
   const fx = shop.x + Math.cos(fan * 2.39996) * SAFE_R * 0.34;
   const fy = shop.y + Math.sin(fan * 2.39996) * SAFE_R * 0.34;
   if (!u.tradeDone) {
@@ -670,7 +671,13 @@ function updateTrade(S, u, team, brain, dt) {
     if (d > SAFE_R * 0.55) {
       if (u.copter && !u.copter.destroyed) { if (flyTo(S, u, fx, fy, dt, SAFE_R * 0.5)) {} return; }
       const st = gotoPt(S, u, fx, fy, dt, { arrive: 30 });
-      if (st === 'stuck') { u.state = 'return'; }
+      if (st === 'stuck') {
+        // can't reach the shop from here right now — cool down so the planner
+        // doesn't immediately re-enter trade and repeat the same approach
+        u.tradeCd = S.t + 20;
+        u.tradeJitter = (u.tradeJitter || 0) + 1;
+        u.state = 'return';
+      }
       return;
     }
     doTradeVisit(S, u, team, brain);
