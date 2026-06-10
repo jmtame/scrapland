@@ -21,23 +21,40 @@ export function makeWeather3(S, scene) {
   rain.frustumCulled = false;
   scene.add(rain);
 
-  // clouds + their shadows (sprites bound to sim cloud data)
-  const cloudSprites = [];
+  // clouds: low-poly puff CLUSTERS built from the sim's per-cloud puff data
+  // (flattened icosahedra, soft-shaded) + one broken ground-shadow each
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xf7fafc, emissive: 0x7d8893, flatShading: true });
+  const cloudGroups = [];
   const ensureClouds = () => {
-    if (cloudSprites.length || !S.clouds) return;
+    if (cloudGroups.length || !S.clouds) return;
+    const ico = new THREE.IcosahedronGeometry(1, 0);
     for (const cl of S.clouds) {
-      const m = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xeef3f7, transparent: true, opacity: 0.28 * cl.op, depthWrite: false });
-      const s = new THREE.Sprite(m);
-      s.scale.set(cl.r * 3.2, cl.r * 1.8, 1);
-      scene.add(s);
-      // flat shadow plane on the ground (not a billboard)
+      const g = new THREE.Group();
+      // main puffs from sim layout
+      cl.puffs.forEach((p, i) => {
+        const m = new THREE.Mesh(ico, cloudMat);
+        const r = p.r * (cl.heavy ? 1.0 : 0.85);
+        m.scale.set(r, r * 0.52, r * 0.78);
+        m.position.set(p.dx, ((i * 37) % 23) - 8, p.dy);
+        m.rotation.y = i * 1.7;
+        g.add(m);
+      });
+      // a couple of small cap puffs on top for volume
+      for (let i = 0; i < 2; i++) {
+        const m = new THREE.Mesh(ico, cloudMat);
+        const r = cl.r * 0.34;
+        m.scale.set(r, r * 0.5, r * 0.7);
+        m.position.set((i - 0.5) * cl.r * 0.5, cl.r * 0.22, ((i * 53) % 17) - 8);
+        g.add(m);
+      }
+      scene.add(g);
       const sh = new THREE.Mesh(
-        new THREE.CircleGeometry(cl.r * 1.1, 12),
-        new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity: 0.55 * cl.op, depthWrite: false }),
+        new THREE.CircleGeometry(cl.r * 1.15, 12),
+        new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity: 0.4 * cl.op, depthWrite: false }),
       );
       sh.rotation.x = -Math.PI / 2;
       scene.add(sh);
-      cloudSprites.push({ cl, s, sh });
+      cloudGroups.push({ cl, g, sh });
     }
   };
 
@@ -89,10 +106,13 @@ export function makeWeather3(S, scene) {
         }
         geo.attributes.position.needsUpdate = true;
       }
-      for (const { cl, s, sh } of cloudSprites) {
-        s.position.set(cl.x, 1050, cl.y);
+      for (const { cl, g, sh } of cloudGroups) {
+        g.position.set(cl.x, 880, cl.y);
         sh.position.set(cl.x + 64, 2.5, cl.y + 86);
       }
+      // day tint on the shared cloud material (bright noon, warm-gray dusk)
+      const cLight = rig.lightLevel();
+      cloudMat.color.setScalar(0.82 + cLight * 0.18);
       for (const { f, s } of fogSprites) {
         const winter = S.world.biomeAt(f.x, f.y) === 'winter';
         s.material.opacity = winter ? 0 : Math.min(0.5, W.fog * f.dens * 0.5);
