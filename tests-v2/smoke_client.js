@@ -56,21 +56,25 @@ g.requestAnimationFrame = (fn) => { rafQueue.push(fn); return rafQueue.length; }
 g.setInterval = () => 0;
 if (!g.performance) g.performance = { now: () => Date.now() };
 
+// The renderer is now WebGL (three.js); node has no GL, so the expected
+// behavior here is: sim boots, then start() fails cleanly with the WebGL
+// message and NO unhandled exception. That still covers bundle parse + sim
+// boot + the graceful-degradation path.
 let failed = 0;
+let sawWebglMsg = false;
+const origErr = console.error;
+console.error = (...a) => {
+  if (String(a[0]).includes('SCRAPLAND boot failed')) sawWebglMsg = true;
+  else origErr(...a);
+};
 try {
   const code = fs.readFileSync(path.join(__dirname, '..', 'dist', 'game.js'), 'utf8');
-  // run the IIFE bundle
   (0, eval)(code);
-  // pump frames: advance fake time so the accumulator runs sim ticks
-  let t = 1000;
-  for (let f = 0; f < 240; f++) {
-    t += 16.7;
-    const fns = rafQueue.splice(0);
-    if (!fns.length) throw new Error('no rAF scheduled at frame ' + f);
-    for (const fn of fns) fn(t);
-  }
-  console.log('PASS client smoke: 240 frames (~4 s) rendered without exceptions');
+  console.error = origErr;
+  if (!sawWebglMsg) throw new Error('expected graceful WebGL-unavailable path in node');
+  console.log('PASS client smoke: bundle parses, sim boots, WebGL fallback message shown');
 } catch (e) {
+  console.error = origErr;
   failed = 1;
   console.error('FAIL client smoke:', e.message);
   console.error((e.stack || '').split('\n').slice(1, 6).join('\n'));
