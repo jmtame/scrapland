@@ -40,7 +40,14 @@ const t = (name, ok, detail) => {
   t('boulders only jungle/winter', S.world.boulders.every(b => S.world.biomeAt(b.x, b.y) !== 'desert'));
   t('teams spawned unfounded', S.teams.length >= 5 && S.units.every(u => u.unfounded));
   t('monument crates+barrels+guards', S.barrels.filter(b => b.tier === 'mon').length >= 16 && S.guards.length === 10);
-  t('convoy road exists, straight, on land', !!S.world.convoyRoad && S.world.convoyRoad.pts.length === 45);
+  {
+    // convoy uses a random dirt road: spawn one and check its span is on land
+    const { spawnConvoy } = await import('../src/sim/vehicles.js');
+    spawnConvoy(S);
+    const cv = S.convoys[0];
+    t('convoy spawns on a dirt road, fully on land', !!cv && cv.pts.length >= 10 && cv.pts.every(p => S.world.landFactor(p.x, p.y) > 0), cv ? cv.pts.length + ' pts' : 'none');
+    S.convoys.length = 0;
+  }
   // airdrops never in safe zone
   let safeDrops = 0;
   for (let i = 0; i < 40; i++) {

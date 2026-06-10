@@ -247,8 +247,8 @@
       let a = ang % TAU;
       if (a < 0) a += TAU;
       const f = a / TAU * N2;
-      const i02 = Math.floor(f) % N2, i12 = (i02 + 1) % N2;
-      return rad[i02] + (rad[i12] - rad[i02]) * (f - i02);
+      const i0 = Math.floor(f) % N2, i1 = (i0 + 1) % N2;
+      return rad[i0] + (rad[i1] - rad[i0]) * (f - i0);
     };
     const landFactor = (x, y) => {
       const dx = (x - cx) / rx, dy = (y - cy) / ry;
@@ -294,18 +294,39 @@
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
       return Math.atan2(b.y - a.y, b.x - a.x);
     }
+    const coastPoint = (onPt, offPt) => {
+      let a = onPt, b = offPt;
+      for (let i = 0; i < 7; i++) {
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (landFactor(m.x, m.y) > 0.015) a = m;
+        else b = m;
+      }
+      return { x: a.x, y: a.y };
+    };
+    const trimToLand = (pts) => {
+      const on = pts.map((p) => landFactor(p.x, p.y) > 0.015);
+      let i0 = on.indexOf(true);
+      let i1 = on.lastIndexOf(true);
+      if (i0 === -1 || i1 - i0 < 2) return null;
+      const out = pts.slice(i0, i1 + 1);
+      if (i0 > 0) out[0] = coastPoint(out[0], pts[i0 - 1]);
+      if (i1 < pts.length - 1) out[out.length - 1] = coastPoint(out[out.length - 1], pts[i1 + 1]);
+      return out;
+    };
     const railHoriz = R.chance(0.5);
     const rails = [];
     for (const band of [[0.15, 0.35], [0.65, 0.85]]) {
       const span = railHoriz ? W : H, cspan = railHoriz ? H : W;
       for (let attempt = 0; attempt < 4 && !rails.some((r) => r.band === band[0]); attempt++) {
         const base = R.rand(band[0], band[1]) * cspan, amp = R.rand(70, Math.min(300, cspan * 0.09)), freq = R.rand(0.7, 1.5), ph = R.rand(0, TAU);
-        const pts = [];
+        let pts = [];
         for (let i = 0; i <= 46; i++) {
           const t = i / 46;
           const cross2 = clamp(base + Math.sin(t * freq * TAU + ph) * amp, 90, cspan - 90);
           pts.push(railHoriz ? { x: t * span, y: cross2 } : { x: cross2, y: t * span });
         }
+        pts = trimToLand(pts);
+        if (!pts) continue;
         let crosses = false;
         for (const other of rails) {
           for (let i = 0; i < pts.length - 1 && !crosses; i++)
@@ -328,7 +349,14 @@
     };
     const railDist = (x, y) => polyDist(x, y, rails);
     const pathDist = (x, y) => polyDist(x, y, roads);
-    for (const rd of roads) rd.fade = rd.pts.map((p) => smooth01((railDist(p.x, p.y) - 17) / 9));
+    for (const rd of roads) {
+      rd.fade = rd.pts.map((p) => {
+        const lf = landFactor(p.x, p.y);
+        if (lf <= 0.015) return 0;
+        return smooth01((railDist(p.x, p.y) - 17) / 9) * smooth01((lf - 0.015) / 0.05);
+      });
+      rd.poles = rd.poles.filter((p) => landFactor(p.x, p.y) > 0.03);
+    }
     const crossings = [];
     for (const rl of rails) for (let i = 0; i < rl.pts.length - 1; i++) {
       for (const rd of roads) for (let j = 0; j < rd.pts.length - 1; j++) {
@@ -361,37 +389,6 @@
       for (const L of lakes) if (dist2(x, y, L.x, L.y) < L.r * L.r) return L;
       return null;
     };
-    const cspanC = railHoriz ? H : W;
-    let bestLane = null;
-    for (let s = 0; s < 57; s++) {
-      const cross2 = clamp(70 + s / 56 * (cspanC - 140), 70, cspanC - 70);
-      let run = 0, bestRun = 0, runStart = 0, bestStart = 0, minClear = 1e9;
-      for (let i = 0; i < 64; i++) {
-        const t = i / 63;
-        const x = railHoriz ? t * W : cross2, y = railHoriz ? cross2 : t * H;
-        const land = onLand(x, y) && !lakeAt(x, y) && landFactor(x, y) >= 0.2;
-        if (land) {
-          if (run === 0) runStart = i;
-          run++;
-          if (run > bestRun) {
-            bestRun = run;
-            bestStart = runStart;
-          }
-          minClear = Math.min(minClear, railDist(x, y));
-        } else run = 0;
-      }
-      const score = bestRun * 2 + (minClear > 180 ? 0.6 : 0) + Math.min(minClear, 500) / 2e3;
-      if (!bestLane || score > bestLane.score) bestLane = { cross: cross2, score, start: bestStart, len: bestRun };
-    }
-    const inset = 2;
-    const i0 = clamp(bestLane.start + inset, 0, 63), i1 = clamp(bestLane.start + bestLane.len - 1 - inset, 0, 63);
-    const cpts = [];
-    for (let i = 0; i <= 44; i++) {
-      const t = (i0 + (i1 - i0) * (i / 44)) / 63;
-      cpts.push(railHoriz ? { x: t * W, y: bestLane.cross } : { x: bestLane.cross, y: t * H });
-    }
-    const convoyRoad = { pts: cpts, w: 38, poles: [], fade: cpts.map(() => 1), convoy: true };
-    roads.push(convoyRoad);
     const monuments = [];
     for (const def of MONUMENTS) {
       let x = def.fx * W, y = def.fy * H;
@@ -456,7 +453,6 @@
       rails,
       railHoriz,
       crossings,
-      convoyRoad,
       lakes,
       lakeAt,
       railDist,
@@ -3367,10 +3363,23 @@
   }
   function spawnConvoy(S2) {
     S2.convoyT = S2.rng.rand(180, 300);
-    const road = S2.world.convoyRoad;
-    if (!road) return;
-    const fwd = S2.rng.chance(0.5);
-    const pts = fwd ? road.pts : [...road.pts].reverse();
+    const cands = [];
+    for (const rd of S2.world.roads) {
+      let start = -1, best = null;
+      for (let i = 0; i <= rd.pts.length; i++) {
+        const ok = i < rd.pts.length && S2.world.landFactor(rd.pts[i].x, rd.pts[i].y) > 0.02;
+        if (ok && start === -1) start = i;
+        if (!ok && start !== -1) {
+          if (!best || i - start > best.len) best = { start, len: i - start };
+          start = -1;
+        }
+      }
+      if (best && best.len >= 10) cands.push({ rd, ...best });
+    }
+    if (!cands.length) return;
+    const pick = cands[Math.floor(S2.rng.next() * cands.length)];
+    let pts = pick.rd.pts.slice(pick.start, pick.start + pick.len);
+    if (S2.rng.chance(0.5)) pts = [...pts].reverse();
     const cv = { pts, seg: 0, x: pts[0].x, y: pts[0].y, px: pts[0].x, py: pts[0].y, ang: 0, taim: 0, hp: CONVOY.vhp, max: CONVOY.vhp, gunCd: 0, dead: false, guards: [] };
     for (let i = 0; i < 4; i++) cv.guards.push({ x: pts[0].x, y: pts[0].y, hp: CONVOY.ghp, max: CONVOY.ghp, angle: 0, gunCd: 0, dead: false });
     S2.convoys.push(cv);
@@ -7380,6 +7389,13 @@
       c = mix(c, win, jw);
       return c;
     }
+    function traceIsland(c, ox, oy) {
+      c.beginPath();
+      S2.world.islandPath.forEach((p, i) => {
+        i ? c.lineTo(p.x - ox, p.y - oy) : c.moveTo(p.x - ox, p.y - oy);
+      });
+      c.closePath();
+    }
     function bake(ci) {
       const cgx = ci % cols, cgy = ci / cols | 0;
       const ox = cgx * CHUNK, oy = cgy * CHUNK;
@@ -7389,12 +7405,26 @@
       const c = cv.getContext("2d");
       c.fillStyle = PAL.ocean0;
       c.fillRect(0, 0, CHUNK, CHUNK);
+      c.save();
+      c.lineJoin = "round";
+      c.strokeStyle = "rgba(64,124,134,0.45)";
+      c.lineWidth = 64;
+      traceIsland(c, ox, oy);
+      c.stroke();
+      c.strokeStyle = "rgba(90,150,158,0.30)";
+      c.lineWidth = 26;
+      traceIsland(c, ox, oy);
+      c.stroke();
+      c.restore();
+      c.save();
+      traceIsland(c, ox, oy);
+      c.clip();
       const CS = 32;
       for (let y = 0; y < CHUNK; y += CS) {
         for (let x = 0; x < CHUNK; x += CS) {
           const wx = ox + x + CS / 2, wy = oy + y + CS / 2;
           const lf = S2.world.landFactor(wx, wy);
-          if (lf <= -0.02) continue;
+          if (lf <= -0.25) continue;
           let [r, g, b] = biomeCols(wx, wy);
           const n = hash2(wx / CS | 0, wy / CS | 0);
           const n2 = hash2(wx / 96 | 0, wy / 96 | 0);
@@ -7402,18 +7432,25 @@
           r *= shade2;
           g *= shade2;
           b *= shade2;
-          if (lf < 0.045) {
-            const f = clamp(lf / 0.045, 0, 1);
-            const winter = S2.world.biomeAt(wx, wy) === "winter";
-            const s = winter ? [204, 219, 228] : [179, 160, 117];
-            const wet = winter ? [150, 170, 185] : [141, 125, 92];
-            const sandC = lf < 0.02 ? wet : s;
-            r = sandC[0] + (r - sandC[0]) * f;
-            g = sandC[1] + (g - sandC[1]) * f;
-            b = sandC[2] + (b - sandC[2]) * f;
-          }
           c.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
           c.fillRect(x - 1, y - 1, CS + 2, CS + 2);
+        }
+      }
+      c.lineCap = "round";
+      const ipath = S2.world.islandPath;
+      for (let pass = 0; pass < 3; pass++) {
+        const lw = pass === 0 ? 96 : pass === 1 ? 30 : 7;
+        for (let i = 0; i < ipath.length; i++) {
+          const a = ipath[i], b2 = ipath[(i + 1) % ipath.length];
+          if (Math.min(a.x, b2.x) > ox + CHUNK + lw || Math.max(a.x, b2.x) < ox - lw) continue;
+          if (Math.min(a.y, b2.y) > oy + CHUNK + lw || Math.max(a.y, b2.y) < oy - lw) continue;
+          const winter = S2.world.biomeAt((a.x + b2.x) / 2, (a.y + b2.y) / 2) === "winter";
+          c.strokeStyle = pass === 0 ? winter ? "rgba(214,227,235,0.95)" : "rgba(186,166,120,0.95)" : pass === 1 ? winter ? "rgba(168,190,204,0.9)" : "rgba(146,128,92,0.9)" : "rgba(240,248,252,0.55)";
+          c.lineWidth = lw;
+          c.beginPath();
+          c.moveTo(a.x - ox, a.y - oy);
+          c.lineTo(b2.x - ox, b2.y - oy);
+          c.stroke();
         }
       }
       for (let y = 0; y < CHUNK; y += 48) {
@@ -7488,9 +7525,9 @@
       for (const m of S2.world.monuments) {
         if (m.x + m.r < ox || m.x - m.r > ox + CHUNK || m.y + m.r < oy || m.y - m.r > oy + CHUNK) continue;
         const g = c.createRadialGradient(m.x - ox, m.y - oy, m.r * 0.2, m.x - ox, m.y - oy, m.r);
-        g.addColorStop(0, "rgba(96,92,82,.85)");
-        g.addColorStop(0.8, "rgba(86,82,72,.55)");
-        g.addColorStop(1, "rgba(80,76,66,0)");
+        g.addColorStop(0, "rgba(110,106,95,.5)");
+        g.addColorStop(0.8, "rgba(98,94,84,.32)");
+        g.addColorStop(1, "rgba(90,86,76,0)");
         c.fillStyle = g;
         c.beginPath();
         c.arc(m.x - ox, m.y - oy, m.r, 0, 7);
@@ -7597,6 +7634,7 @@
           c.fillRect(x + 5, y - 31, 2.5, 5);
         }
       }
+      c.restore();
       return cv;
     }
     return {
@@ -7973,14 +8011,14 @@
     } else if (n.type === "stone") {
       const sc = 0.55 + 0.45 * stepv;
       shadow(ctx, n.x, n.y + 4, n.r * sc);
-      ctx.fillStyle = PAL.stoneDk;
+      ctx.fillStyle = "#4f4d48";
       poly(ctx, n.x + 1.5, n.y + 2.5, n.r * sc, 6, n.seed);
       ctx.fill();
-      ctx.fillStyle = rgrad(ctx, n.x, n.y, n.r * sc, "#9aa1a8", "#565c63");
+      ctx.fillStyle = rgrad(ctx, n.x, n.y, n.r * sc, "#979388", "#56534b");
       poly(ctx, n.x, n.y, n.r * sc, 6, n.seed);
       ctx.fill();
       ctx.globalAlpha = 0.85;
-      ctx.fillStyle = PAL.stoneLt;
+      ctx.fillStyle = "#b2ada0";
       poly(ctx, n.x - n.r * sc * 0.12, n.y - n.r * sc * 0.18, n.r * sc * 0.55, 5, n.seed + 1);
       ctx.fill();
       ctx.globalAlpha = 1;

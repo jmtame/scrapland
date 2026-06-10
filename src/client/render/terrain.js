@@ -24,6 +24,14 @@ export function makeTerrain(S) {
     return c;
   }
 
+  function traceIsland(c, ox, oy) {
+    c.beginPath();
+    S.world.islandPath.forEach((p, i) => {
+      i ? c.lineTo(p.x - ox, p.y - oy) : c.moveTo(p.x - ox, p.y - oy);
+    });
+    c.closePath();
+  }
+
   function bake(ci) {
     const cgx = ci % cols, cgy = (ci / cols) | 0;
     const ox = cgx * CHUNK, oy = cgy * CHUNK;
@@ -35,30 +43,61 @@ export function makeTerrain(S) {
     c.fillStyle = PAL.ocean0;
     c.fillRect(0, 0, CHUNK, CHUNK);
 
-    // ground cells (32 px) with noise mottling, only on land
+    // shallow-water halo around the island (drawn under the land clip)
+    c.save();
+    c.lineJoin = 'round';
+    c.strokeStyle = 'rgba(64,124,134,0.45)';
+    c.lineWidth = 64;
+    traceIsland(c, ox, oy);
+    c.stroke();
+    c.strokeStyle = 'rgba(90,150,158,0.30)';
+    c.lineWidth = 26;
+    traceIsland(c, ox, oy);
+    c.stroke();
+    c.restore();
+
+    // everything terrestrial is clipped to the SMOOTH island polygon —
+    // the coastline comes from the path, not the ground-cell grid
+    c.save();
+    traceIsland(c, ox, oy);
+    c.clip();
+
+    // ground cells (32 px) with noise mottling, overscanned past the coast
     const CS = 32;
     for (let y = 0; y < CHUNK; y += CS) {
       for (let x = 0; x < CHUNK; x += CS) {
         const wx = ox + x + CS / 2, wy = oy + y + CS / 2;
         const lf = S.world.landFactor(wx, wy);
-        if (lf <= -0.02) continue;
+        if (lf <= -0.25) continue; // clip handles the exact edge
         let [r, g, b] = biomeCols(wx, wy);
-        // depth shading + noise
         const n = hash2((wx / CS) | 0, (wy / CS) | 0);
         const n2 = hash2((wx / 96) | 0, (wy / 96) | 0);
         const shade = 0.88 + n * 0.14 + (n2 - 0.5) * 0.12 - (wy / WORLD.h) * 0.06;
         r *= shade; g *= shade; b *= shade;
-        // shoreline sand blend
-        if (lf < 0.045) {
-          const f = clamp(lf / 0.045, 0, 1);
-          const winter = S.world.biomeAt(wx, wy) === 'winter';
-          const s = winter ? [204, 219, 228] : [179, 160, 117];
-          const wet = winter ? [150, 170, 185] : [141, 125, 92];
-          const sandC = lf < 0.02 ? wet : s;
-          r = sandC[0] + (r - sandC[0]) * f; g = sandC[1] + (g - sandC[1]) * f; b = sandC[2] + (b - sandC[2]) * f;
-        }
         c.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
         c.fillRect(x - 1, y - 1, CS + 2, CS + 2);
+      }
+    }
+
+    // beach: sand band hugging the coast contour (per-segment biome colors),
+    // then a wet-sand line and a foam edge — all inside the island clip
+    c.lineCap = 'round';
+    const ipath = S.world.islandPath;
+    for (let pass = 0; pass < 3; pass++) {
+      const lw = pass === 0 ? 96 : pass === 1 ? 30 : 7;
+      for (let i = 0; i < ipath.length; i++) {
+        const a = ipath[i], b2 = ipath[(i + 1) % ipath.length];
+        if (Math.min(a.x, b2.x) > ox + CHUNK + lw || Math.max(a.x, b2.x) < ox - lw) continue;
+        if (Math.min(a.y, b2.y) > oy + CHUNK + lw || Math.max(a.y, b2.y) < oy - lw) continue;
+        const winter = S.world.biomeAt((a.x + b2.x) / 2, (a.y + b2.y) / 2) === 'winter';
+        c.strokeStyle = pass === 0 ? (winter ? 'rgba(214,227,235,0.95)' : 'rgba(186,166,120,0.95)')
+          : pass === 1 ? (winter ? 'rgba(168,190,204,0.9)' : 'rgba(146,128,92,0.9)')
+          : 'rgba(240,248,252,0.55)';
+        c.lineWidth = lw;
+        c.beginPath();
+        c.moveTo(a.x - ox, a.y - oy);
+        c.lineTo(b2.x - ox, b2.y - oy);
+        c.stroke();
       }
     }
 
@@ -125,9 +164,9 @@ export function makeTerrain(S) {
     for (const m of S.world.monuments) {
       if (m.x + m.r < ox || m.x - m.r > ox + CHUNK || m.y + m.r < oy || m.y - m.r > oy + CHUNK) continue;
       const g = c.createRadialGradient(m.x - ox, m.y - oy, m.r * 0.2, m.x - ox, m.y - oy, m.r);
-      g.addColorStop(0, 'rgba(96,92,82,.85)');
-      g.addColorStop(0.8, 'rgba(86,82,72,.55)');
-      g.addColorStop(1, 'rgba(80,76,66,0)');
+      g.addColorStop(0, 'rgba(110,106,95,.5)');
+      g.addColorStop(0.8, 'rgba(98,94,84,.32)');
+      g.addColorStop(1, 'rgba(90,86,76,0)');
       c.fillStyle = g;
       c.beginPath(); c.arc(m.x - ox, m.y - oy, m.r, 0, 7); c.fill();
       // cracks
@@ -142,7 +181,7 @@ export function makeTerrain(S) {
       }
     }
 
-    // roads (with rail fade + wear)
+    // roads (with rail fade + wear) — still inside the island clip
     c.lineCap = 'round'; c.lineJoin = 'round';
     for (const rd of S.world.roads) {
       for (let i = 0; i < rd.pts.length - 1; i++) {
@@ -212,6 +251,7 @@ export function makeTerrain(S) {
         c.fillStyle = '#1c160e'; c.fillRect(x - 7.5, y - 31, 2.5, 5); c.fillRect(x + 5, y - 31, 2.5, 5);
       }
     }
+    c.restore(); // island clip
     return cv;
   }
 

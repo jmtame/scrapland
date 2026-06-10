@@ -79,6 +79,27 @@ export function buildWorld(S) {
     return Math.atan2(b.y - a.y, b.x - a.x);
   }
 
+  // trim a polyline to the island: drop off-land ends, bisect the boundary
+  // points onto the waterline so roads/rails END at the coast, not in the sea
+  const coastPoint = (onPt, offPt) => {
+    let a = onPt, b = offPt;
+    for (let i = 0; i < 7; i++) {
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (landFactor(m.x, m.y) > 0.015) a = m; else b = m;
+    }
+    return { x: a.x, y: a.y };
+  };
+  const trimToLand = (pts) => {
+    const on = pts.map(p => landFactor(p.x, p.y) > 0.015);
+    let i0 = on.indexOf(true);
+    let i1 = on.lastIndexOf(true);
+    if (i0 === -1 || i1 - i0 < 2) return null;
+    const out = pts.slice(i0, i1 + 1);
+    if (i0 > 0) out[0] = coastPoint(out[0], pts[i0 - 1]);
+    if (i1 < pts.length - 1) out[out.length - 1] = coastPoint(out[out.length - 1], pts[i1 + 1]);
+    return out;
+  };
+
   // ---- rails ----
   const railHoriz = R.chance(0.5);
   const rails = [];
@@ -86,12 +107,14 @@ export function buildWorld(S) {
     const span = railHoriz ? W : H, cspan = railHoriz ? H : W;
     for (let attempt = 0; attempt < 4 && !rails.some(r => r.band === band[0]); attempt++) {
       const base = R.rand(band[0], band[1]) * cspan, amp = R.rand(70, Math.min(300, cspan * 0.09)), freq = R.rand(0.7, 1.5), ph = R.rand(0, TAU);
-      const pts = [];
+      let pts = [];
       for (let i = 0; i <= 46; i++) {
         const t = i / 46;
         const cross = clamp(base + Math.sin(t * freq * TAU + ph) * amp, 90, cspan - 90);
         pts.push(railHoriz ? { x: t * span, y: cross } : { x: cross, y: t * span });
       }
+      pts = trimToLand(pts);
+      if (!pts) continue;
       let crosses = false;
       for (const other of rails) {
         for (let i = 0; i < pts.length - 1 && !crosses; i++)
@@ -113,8 +136,15 @@ export function buildWorld(S) {
   const railDist = (x, y) => polyDist(x, y, rails);
   const pathDist = (x, y) => polyDist(x, y, roads);
 
-  // road fade where rails cross
-  for (const rd of roads) rd.fade = rd.pts.map(p => smooth01((railDist(p.x, p.y) - 17) / 9));
+  // road fade where rails cross + taper out approaching the coast
+  for (const rd of roads) {
+    rd.fade = rd.pts.map(p => {
+      const lf = landFactor(p.x, p.y);
+      if (lf <= 0.015) return 0;
+      return smooth01((railDist(p.x, p.y) - 17) / 9) * smooth01((lf - 0.015) / 0.05);
+    });
+    rd.poles = rd.poles.filter(p => landFactor(p.x, p.y) > 0.03);
+  }
 
   // ---- crossings ----
   const crossings = [];
@@ -152,31 +182,8 @@ export function buildWorld(S) {
     return null;
   };
 
-  // ---- convoy road (straight, parallel to rails, on land, rail-free) ----
-  const cspanC = railHoriz ? H : W;
-  let bestLane = null;
-  for (let s = 0; s < 57; s++) {
-    const cross = clamp(70 + (s / 56) * (cspanC - 140), 70, cspanC - 70);
-    let run = 0, bestRun = 0, runStart = 0, bestStart = 0, minClear = 1e9;
-    for (let i = 0; i < 64; i++) {
-      const t = i / 63;
-      const x = railHoriz ? t * W : cross, y = railHoriz ? cross : t * H;
-      const land = onLand(x, y) && !lakeAt(x, y) && landFactor(x, y) >= 0.2;
-      if (land) { if (run === 0) runStart = i; run++; if (run > bestRun) { bestRun = run; bestStart = runStart; } minClear = Math.min(minClear, railDist(x, y)); }
-      else run = 0;
-    }
-    const score = bestRun * 2 + (minClear > 180 ? 0.6 : 0) + Math.min(minClear, 500) / 2000;
-    if (!bestLane || score > bestLane.score) bestLane = { cross, score, start: bestStart, len: bestRun };
-  }
-  const inset = 2;
-  const i0 = clamp(bestLane.start + inset, 0, 63), i1 = clamp(bestLane.start + bestLane.len - 1 - inset, 0, 63);
-  const cpts = [];
-  for (let i = 0; i <= 44; i++) {
-    const t = (i0 + (i1 - i0) * (i / 44)) / 63;
-    cpts.push(railHoriz ? { x: t * W, y: bestLane.cross } : { x: bestLane.cross, y: t * H });
-  }
-  const convoyRoad = { pts: cpts, w: 38, poles: [], fade: cpts.map(() => 1), convoy: true };
-  roads.push(convoyRoad);
+  // (the old dedicated straight convoy lane is gone — convoys now run a
+  // random dirt road end-to-end; see vehicles.spawnConvoy)
 
   // ---- monuments ----
   const monuments = [];
@@ -227,7 +234,7 @@ export function buildWorld(S) {
 
   S.world = {
     island, islandPath, onLand, landFactor, islandRadAt, biomeAt, biomeRidge, shop,
-    roads, rails, railHoriz, crossings, convoyRoad, lakes, lakeAt, railDist, pathDist,
+    roads, rails, railHoriz, crossings, lakes, lakeAt, railDist, pathDist,
     monuments, boulders, rocks, flora: [], palms: [],
   };
 

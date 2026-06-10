@@ -296,10 +296,24 @@ export function updateConvoys(S, dt) {
 
 export function spawnConvoy(S) {
   S.convoyT = S.rng.rand(180, 300);
-  const road = S.world.convoyRoad;
-  if (!road) return;
-  const fwd = S.rng.chance(0.5);
-  const pts = fwd ? road.pts : [...road.pts].reverse();
+  // pick a random dirt road and run its longest on-land span end-to-end
+  const cands = [];
+  for (const rd of S.world.roads) {
+    let start = -1, best = null;
+    for (let i = 0; i <= rd.pts.length; i++) {
+      const ok = i < rd.pts.length && S.world.landFactor(rd.pts[i].x, rd.pts[i].y) > 0.02;
+      if (ok && start === -1) start = i;
+      if (!ok && start !== -1) {
+        if (!best || i - start > best.len) best = { start, len: i - start };
+        start = -1;
+      }
+    }
+    if (best && best.len >= 10) cands.push({ rd, ...best });
+  }
+  if (!cands.length) return;
+  const pick = cands[Math.floor(S.rng.next() * cands.length)];
+  let pts = pick.rd.pts.slice(pick.start, pick.start + pick.len);
+  if (S.rng.chance(0.5)) pts = [...pts].reverse();
   const cv = { pts, seg: 0, x: pts[0].x, y: pts[0].y, px: pts[0].x, py: pts[0].y, ang: 0, taim: 0, hp: CONVOY.vhp, max: CONVOY.vhp, gunCd: 0, dead: false, guards: [] };
   for (let i = 0; i < 4; i++) cv.guards.push({ x: pts[0].x, y: pts[0].y, hp: CONVOY.ghp, max: CONVOY.ghp, angle: 0, gunCd: 0, dead: false });
   S.convoys.push(cv);

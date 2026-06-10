@@ -108,12 +108,12 @@ export function drawNode(ctx, S, n) {
   } else if (n.type === 'stone') {
     const sc = 0.55 + 0.45 * stepv;
     shadow(ctx, n.x, n.y + 4, n.r * sc);
-    ctx.fillStyle = PAL.stoneDk;
+    ctx.fillStyle = '#4f4d48';
     poly(ctx, n.x + 1.5, n.y + 2.5, n.r * sc, 6, n.seed); ctx.fill();
-    ctx.fillStyle = rgrad(ctx, n.x, n.y, n.r * sc, '#9aa1a8', '#565c63');
+    ctx.fillStyle = rgrad(ctx, n.x, n.y, n.r * sc, '#979388', '#56534b');
     poly(ctx, n.x, n.y, n.r * sc, 6, n.seed); ctx.fill();
     ctx.globalAlpha = 0.85;
-    ctx.fillStyle = PAL.stoneLt;
+    ctx.fillStyle = '#b2ada0';
     poly(ctx, n.x - n.r * sc * 0.12, n.y - n.r * sc * 0.18, n.r * sc * 0.55, 5, n.seed + 1); ctx.fill();
     ctx.globalAlpha = 1;
   } else {
