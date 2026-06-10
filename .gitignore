@@ -10,3 +10,6 @@ node_modules/
 # Dev-only files (kept locally, not part of the playable game)
 tests/
 CLAUDE.md
+
+tests-v2/logs/
+package-lock.json

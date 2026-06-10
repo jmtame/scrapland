@@ -1,0 +1,15 @@
+{
+  "name": "scrapland",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/client/main.js --bundle --format=iife --outfile=dist/game.js --legal-comments=none",
+    "watch": "esbuild src/client/main.js --bundle --format=iife --outfile=dist/game.js --legal-comments=none --watch",
+    "test": "node tests-v2/verify.js",
+    "match": "node tests-v2/sim_match.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
