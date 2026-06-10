@@ -41,31 +41,35 @@ export function makeTerrain3(S, scene) {
   ocean.position.set(WORLD.w / 2, -3, WORLD.h / 2);
   scene.add(ocean);
 
+  // sparse glint texture: tiny bright flecks, mostly empty — reads as light
+  // dancing on water instead of tiles
   const noise = document.createElement('canvas');
-  noise.width = 128; noise.height = 128;
+  noise.width = 256; noise.height = 256;
   const nc = noise.getContext('2d');
-  for (let y = 0; y < 128; y += 4) {
-    for (let x = 0; x < 128; x += 4) {
-      const v = Math.random();
-      nc.fillStyle = `rgba(190,230,240,${v > 0.82 ? 0.5 : v > 0.6 ? 0.16 : 0})`;
-      nc.fillRect(x, y, 4, 4);
-    }
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * 256, y = Math.random() * 256;
+    nc.fillStyle = `rgba(200,235,245,${0.25 + Math.random() * 0.5})`;
+    nc.fillRect(x, y, 1.6 + Math.random() * 2.4, 1.2);
   }
   const noiseTex = new THREE.CanvasTexture(noise);
   noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping;
-  noiseTex.repeat.set(70, 46);
+  noiseTex.repeat.set(220, 146);
   const shimmer = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD.w * 6, WORLD.h * 6),
-    new THREE.MeshBasicMaterial({ map: noiseTex, transparent: true, opacity: 0.10, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: noiseTex, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   shimmer.rotation.x = -Math.PI / 2;
   shimmer.position.set(WORLD.w / 2, -1.5, WORLD.h / 2);
   scene.add(shimmer);
-  const shimmer2 = shimmer.clone();
-  shimmer2.material = new THREE.MeshBasicMaterial({ map: noiseTex.clone(), transparent: true, opacity: 0.07, depthWrite: false });
-  shimmer2.material.map.wrapS = shimmer2.material.map.wrapT = THREE.RepeatWrapping;
-  shimmer2.material.map.repeat.set(41, 27);
-  shimmer2.position.y = -1.2;
+  const noiseTex2 = noiseTex.clone();
+  noiseTex2.wrapS = noiseTex2.wrapT = THREE.RepeatWrapping;
+  noiseTex2.repeat.set(133, 88);
+  const shimmer2 = new THREE.Mesh(
+    new THREE.PlaneGeometry(WORLD.w * 6, WORLD.h * 6),
+    new THREE.MeshBasicMaterial({ map: noiseTex2, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  shimmer2.rotation.x = -Math.PI / 2;
+  shimmer2.position.set(WORLD.w / 2, -1.2, WORLD.h / 2);
   scene.add(shimmer2);
 
   // sky dome + sun disc
