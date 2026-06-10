@@ -1,6 +1,6 @@
 # SCRAPLAND
 
-A top-down survival game inspired by Rust. Scavenge scrap, build and fortify a
+A top-down survival game inspired by Rust - written in Opus 4.8 initially, rewritten in Fable Max. Scavenge scrap, build and fortify a
 base, arm up at the trade zone, and outlast 7 rival AI teams that gather,
 fortify, and raid each other across a large, procedurally-built map.
 
