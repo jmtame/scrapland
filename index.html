@@ -1,264 +1,181 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>SCRAPLAND — top-down survival</title>
+<title>SCRAPLAND</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root{
-    --bg:#1b2018; --panel:rgba(20,26,16,.82); --panel2:rgba(33,42,25,.9);
-    --edge:#5a6b3a; --edge2:#39431f; --ink:#d8e0c2; --ink-dim:#9aa67f;
-    --wood:#b07b3e; --stone:#9aa1a8; --metal:#d98a3a; --accent:#c4d66a;
-    --danger:#c0432f;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;overflow:hidden;background:var(--bg);
-    font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;color:var(--ink);
-    -webkit-user-select:none;user-select:none;cursor:crosshair}
-  #game{display:block;position:fixed;inset:0;image-rendering:auto}
-  /* ---------- HUD ---------- */
-  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
-  .slot,.bpiece{pointer-events:auto;cursor:pointer}
-  .panel{background:var(--panel);border:1px solid var(--edge2);
-    border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.03)}
-  #res{position:absolute;top:14px;left:14px;padding:8px 11px 9px}
-  .inv-h{font-size:9.5px;letter-spacing:.16em;color:var(--ink-dim);text-transform:uppercase;font-weight:700;margin-bottom:6px}
-  .inv-grid{display:grid;grid-template-columns:auto auto;gap:5px 14px}
-  .inv-cell{display:flex;align-items:center;gap:6px}
-  .inv-cell .n{font-weight:700;font-size:14px;min-width:42px;text-align:right;font-variant-numeric:tabular-nums}
-  #leaderboard{position:absolute;top:104px;left:14px;padding:7px 10px 8px;min-width:196px}
-  .lb-legend{font-size:8px;letter-spacing:.04em;color:var(--ink-dim);opacity:.7}
-  .lb-legend b{color:#e0b25a}
-  #lb-rows{display:flex;flex-direction:column;gap:2px;margin-top:4px}
-  .lb-row{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.3}
-  .lb-dot{width:8px;height:8px;border-radius:2px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
-  .lb-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
-  .lb-row.lb-dead .lb-name{opacity:.4;text-decoration:line-through}
-  .lb-row.lb-dead .lb-dot{opacity:.3}
-  .lb-row.lb-bounty .lb-name{color:#ffe07a}
-  .lb-k{color:#e0b25a;min-width:22px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-  .lb-tier{font-size:8px;font-weight:800;letter-spacing:.06em;padding:1px 3px;border-radius:3px;vertical-align:middle;margin-left:3px}
-  .lb-hard{background:#7c2b22;color:#ffb4a4}
-  .lb-easy{background:#2e5a2c;color:#bdf0a8}
-  .lb-res{display:flex;align-items:center;gap:3px;min-width:52px;justify-content:flex-end;color:var(--ink-dim);font-variant-numeric:tabular-nums}
-  .lb-res .ic{width:11px;height:11px;border-radius:2px}
-  #mapbtn{position:absolute;top:14px;left:50%;transform:translateX(-50%);padding:7px 14px;cursor:pointer;pointer-events:auto;
-    font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #mapbtn.on{color:#10140d;background:linear-gradient(135deg,#d8c879,#b89a3f);border-color:#e6c878}
-  #ghostbtn{position:absolute;top:50px;left:50%;transform:translateX(-50%);padding:6px 13px;cursor:pointer;pointer-events:auto;
-    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #ghostbtn.on{color:#10140d;background:linear-gradient(135deg,#aed6ff,#5aa0e0);border-color:#c2e2ff}
-  #rocketbtn{position:absolute;top:86px;left:50%;transform:translateX(-50%);padding:6px 13px;cursor:pointer;pointer-events:auto;
-    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #rocketbtn.on{color:#10140d;background:linear-gradient(135deg,#ffb27a,#e0662a);border-color:#ffcaa0}
-  #refillbtn{position:absolute;top:122px;left:50%;transform:translateX(-50%);padding:6px 13px;cursor:pointer;pointer-events:auto;
-    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #refillbtn:hover{color:#10140d;background:linear-gradient(135deg,#bfe8a0,#79c04f);border-color:#cdf0b0}
-  #boosthardbtn{position:absolute;top:158px;left:50%;transform:translateX(-50%);padding:6px 13px;cursor:pointer;pointer-events:auto;
-    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #boosthardbtn:hover{color:#10140d;background:linear-gradient(135deg,#e6a0a0,#c0432f);border-color:#f0b8b8}
-  #debugbtn{position:absolute;top:194px;left:50%;transform:translateX(-50%);padding:6px 13px;cursor:pointer;pointer-events:auto;
-    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-dim);user-select:none}
-  #debugbtn:hover{color:#10140d;background:linear-gradient(135deg,#c8b6e6,#7a5ac0);border-color:#d8c8f0}
-  #debugbtn.on{color:#10140d;background:linear-gradient(135deg,#c8b6e6,#7a5ac0);border-color:#d8c8f0}
-  .ic{width:16px;height:16px;border-radius:3px;display:inline-block;
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
-  .ic.wood{background:linear-gradient(135deg,#c98a47,#7c5326)}
-  .ic.stone{background:linear-gradient(135deg,#b9c0c7,#727981)}
-  .ic.metal{background:linear-gradient(135deg,#f0a64e,#9c5a1f)}
-  .ic.scrap{background:linear-gradient(135deg,#ffe07a,#c99a2a)}
+:root {
+  --bg: #14120e;
+  --panel: rgba(24, 21, 16, .88);
+  --panel2: rgba(36, 31, 23, .92);
+  --edge: #574a38;
+  --edge2: #3a3226;
+  --ink: #ddd5c2;
+  --ink-dim: #97907d;
+  --accent: #d08b3c;
+  --accent2: #c4d66a;
+  --danger: #b8402e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+body { cursor: crosshair; user-select: none; -webkit-user-select: none;
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; color: var(--ink); }
+canvas#game { position: fixed; inset: 0; display: block; }
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#hud .panel { background: var(--panel); border: 1px solid var(--edge2); border-radius: 7px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04); }
+#hud button, #hud .slot, #hud .bpiece, #hud .modal { pointer-events: auto; }
+#hud button { background: var(--panel2); color: var(--ink); border: 1px solid var(--edge2);
+  border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+#hud button:hover { border-color: var(--accent); color: #fff; }
+#hud button.on { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 8px rgba(208,139,60,.35); }
+.hidden { display: none !important; }
 
-  #hotbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
-    display:flex;gap:8px}
-  .slot{width:62px;height:62px;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:3px;position:relative;color:var(--ink-dim)}
-  .slot .key{position:absolute;top:3px;left:5px;font-size:10px;color:var(--ink-dim);opacity:.8}
-  .slot .gi{font-size:24px;line-height:1}
-  .slot .nm{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase}
-  .slot.sel{border-color:var(--accent);color:var(--ink);
-    box-shadow:0 0 0 1px var(--accent),0 0 16px rgba(196,214,106,.35)}
-  .slot.sel .nm{color:var(--accent)}
+#res { position: fixed; top: 14px; left: 14px; padding: 9px 11px; min-width: 150px; }
+#res h4 { margin: 0 0 6px; font-size: 10px; letter-spacing: .14em; color: var(--ink-dim); }
+#res .row { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; font-size: 12.5px; }
+.ic { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.ic.wood { background: linear-gradient(135deg, #b07b3e, #6f4a22); }
+.ic.stone { background: linear-gradient(135deg, #aab1b8, #5f656c); }
+.ic.metal { background: linear-gradient(135deg, #e0a23a, #8a5a1c); }
+.ic.scrap { background: linear-gradient(135deg, #d6dce0, #717880); }
 
-  #buildmenu{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);
-    display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px}
-  .brow{display:flex;gap:8px}
-  .bhint{font-size:10.5px;color:var(--ink-dim);letter-spacing:.02em}
-  .bhint b{color:var(--accent);font-weight:700}
-  .bpiece{width:74px;padding:8px 6px 7px;display:flex;flex-direction:column;align-items:center;
-    gap:5px;border-radius:6px;border:1px solid var(--edge2);background:var(--panel2);
-    color:var(--ink-dim);transition:.12s}
-  .bpiece.sel{border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent)}
-  .bpiece .pv{width:34px;height:34px}
-  .bpiece .bn{font-size:10px;letter-spacing:.05em;text-transform:uppercase}
-  .bpiece .cost{font-size:9.5px;color:var(--ink-dim);display:flex;gap:6px}
-  .bpiece .cost b{color:var(--ink);font-weight:600}
-  .bpiece.cant{opacity:.45}
+#leaderboard { position: fixed; top: 112px; left: 14px; padding: 9px 11px; min-width: 178px; font-size: 12px; }
+#leaderboard h4 { margin: 0 0 2px; font-size: 10px; letter-spacing: .14em; color: var(--ink-dim); }
+#leaderboard .legend { font-size: 9.5px; color: var(--ink-dim); margin-bottom: 6px; }
+#lb-rows .lbr { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; }
+#lb-rows .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+#lb-rows .nm { flex: 1; white-space: nowrap; overflow: hidden; }
+#lb-rows .dead { opacity: .38; text-decoration: line-through; }
+#lb-rows .lb-bounty { color: #ffd76b; }
+#lb-rows .pill { font-size: 8.5px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+#lb-rows .pill.hard { background: rgba(184,64,46,.3); color: #ff8a70; }
+#lb-rows .pill.easy { background: rgba(122,184,90,.25); color: #a4d27e; }
 
-  #ammo{position:absolute;bottom:18px;right:18px;padding:10px 16px;text-align:right}
-  #ammo .mag{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.04em}
-  #ammo .mag small{font-size:14px;color:var(--ink-dim);font-weight:600}
-  #ammo .rl{font-size:10px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;
-    min-height:13px}
+#topbtns { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
 
-  #vitals{position:absolute;bottom:18px;left:18px;display:flex;align-items:center;gap:9px;padding:9px 12px}
-  #timepanel{position:absolute;left:18px;bottom:60px;display:flex;align-items:center;gap:10px;padding:6px 11px;pointer-events:auto}   /* sits just above the HP bar */
-  #timepanel #playtime{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);letter-spacing:.04em;font-size:15px}
-  #timepanel .spd{display:flex;gap:4px}
-  #timepanel .spdbtn{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-dim);background:rgba(255,255,255,.05);border:1px solid var(--edge2);border-radius:5px;padding:2px 7px}
-  #timepanel .spdbtn:hover{border-color:var(--accent);color:var(--ink)}
-  #timepanel .spdbtn.on{background:linear-gradient(135deg,#bfe8a0,#79c04f);color:#10140d;border-color:#cdf0b0}
-  #vitals .hpicon{font-size:10px;letter-spacing:.14em;color:var(--ink-dim);text-transform:uppercase;font-weight:700}
-  .hpwrap{width:150px;height:14px;border-radius:7px;background:#2a2118;overflow:hidden;
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.45)}
-  #hpfill{height:100%;width:100%;background:linear-gradient(90deg,#9ccb5a,#6fae3e);transition:width .12s linear}
-  #hptxt{font-weight:700;font-variant-numeric:tabular-nums;min-width:24px;font-size:14px}
+#help { position: fixed; top: 14px; right: 14px; max-width: 248px; padding: 10px 12px; font-size: 11.5px; line-height: 1.45; }
+#help h4 { margin: 0; font-size: 12px; color: var(--accent); display: flex; justify-content: space-between; }
+#help h4 span { color: var(--ink-dim); cursor: pointer; pointer-events: auto; font-weight: 400; }
+#help.min .body { display: none; }
+#help .body { margin-top: 7px; color: var(--ink-dim); }
+#help kbd { background: var(--panel2); border: 1px solid var(--edge2); border-radius: 3px; padding: 0 4px; font-size: 10px; color: var(--ink); }
 
-  #keypad{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;
-    display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px;border-radius:12px;
-    background:var(--panel);border:1px solid var(--edge);pointer-events:auto;
-    box-shadow:0 0 0 100vmax rgba(0,0,0,.55), 0 12px 34px rgba(0,0,0,.55)}
-  .kp-title{font-size:12px;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;font-weight:700}
-  .kp-disp{font-size:30px;font-weight:700;letter-spacing:.34em;font-variant-numeric:tabular-nums;color:var(--ink);
-    background:#1c2216;border:1px solid var(--edge2);border-radius:8px;padding:7px 20px;min-width:150px;text-align:center}
-  .kp-grid{display:grid;grid-template-columns:repeat(3,58px);gap:8px}
-  .kp-btn{height:48px;border-radius:8px;border:1px solid var(--edge2);background:var(--panel2);color:var(--ink);
-    font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto}
-  .kp-btn:hover{border-color:var(--accent)}
-  .kp-btn.wide{font-size:12px;letter-spacing:.08em}
-  .kp-btn.ok{color:var(--accent)}
-  .kp-cancel{font-size:11px;color:var(--ink-dim);cursor:pointer;pointer-events:auto;letter-spacing:.05em}
-  .kp-cancel:hover{color:var(--ink)}
-  #store{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;min-width:360px;
-    display:flex;flex-direction:column;gap:9px;padding:18px;border-radius:12px;background:var(--panel);border:1px solid var(--edge);
-    pointer-events:auto;box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 12px 34px rgba(0,0,0,.55)}
-  .store-row{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px}
-  .store-row .sk{min-width:104px;text-align:center;text-transform:capitalize;color:var(--ink-dim)}
-  .store-row .sk b,.store-row .iv b{color:var(--ink);font-variant-numeric:tabular-nums}
-  .store-row .iv{min-width:58px;color:var(--ink-dim)}
-  .store-row button{border:1px solid var(--edge2);background:var(--panel2);color:var(--ink);border-radius:6px;
-    padding:4px 7px;font-size:11px;cursor:pointer;pointer-events:auto}
-  .store-row button:hover{border-color:var(--accent)}
+#vitals { position: fixed; left: 18px; bottom: 18px; padding: 9px 12px; display: flex; align-items: center; gap: 9px; }
+#vitals .lbl { font-size: 10px; letter-spacing: .1em; color: var(--ink-dim); }
+#hpbar { width: 150px; height: 13px; background: #0e0c09; border-radius: 7px; overflow: hidden; border: 1px solid var(--edge2); }
+#hpfill { height: 100%; width: 100%; border-radius: 7px; transition: width .12s;
+  background: linear-gradient(180deg, #9ccb5a, #6fae3e); }
+#hptxt { font-size: 12px; min-width: 26px; text-align: right; }
 
-  #shop{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;min-width:400px;
-    display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:12px;background:var(--panel);border:1px solid var(--edge);
-    pointer-events:auto;box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 12px 34px rgba(0,0,0,.55)}
-  .shop-scrap{font-size:13px;color:var(--ink-dim);text-align:center}
-  .shop-scrap b{color:var(--accent);font-variant-numeric:tabular-nums}
-  .shop-cols{display:flex;gap:16px}
-  .shop-col{flex:1}
-  .shop-h{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:6px;text-align:center}
-  .shop-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:8px 10px;margin-bottom:6px;
-    border:1px solid var(--edge2);border-radius:7px;background:var(--panel2);cursor:pointer;pointer-events:auto;font-size:12px}
-  .shop-row:hover{border-color:var(--accent)}
-  .shop-row .sx{color:var(--accent);font-weight:700;white-space:nowrap}
+#timepanel { position: fixed; left: 18px; bottom: 64px; padding: 7px 10px; display: flex; gap: 7px; align-items: center; font-size: 13px; }
+#playtime { min-width: 46px; color: var(--accent2); }
+.spdbtn { padding: 3px 8px !important; font-size: 11px !important; }
 
-  #help{position:absolute;top:14px;right:14px;padding:11px 14px;max-width:240px;font-size:11.5px;
-    line-height:1.55;color:var(--ink-dim)}
-  #help h3{font-size:11px;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;
-    margin-bottom:6px;font-weight:700}
-  #help b{color:var(--ink);font-weight:600}
-  #help .k{display:inline-block;min-width:15px;padding:0 4px;border-radius:3px;
-    background:var(--edge2);color:var(--ink);text-align:center;font-size:10.5px;font-weight:700}
-  #help.min .body{display:none}
-  #help .toggle{cursor:pointer;pointer-events:auto;color:var(--ink-dim);font-size:10px;float:right;
-    margin-top:-2px}
+#hotbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 6px; }
+.slot { width: 58px; height: 58px; background: var(--panel); border: 1px solid var(--edge2); border-radius: 8px;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
+.slot .key { position: absolute; top: 3px; left: 6px; font-size: 9px; color: var(--ink-dim); }
+.slot .nm { font-size: 8px; letter-spacing: .04em; color: var(--ink-dim); text-transform: uppercase; }
+.slot svg { width: 26px; height: 26px; color: var(--ink); }
+.slot.sel { border-color: var(--accent); box-shadow: 0 0 10px rgba(208,139,60,.4), inset 0 0 6px rgba(208,139,60,.15); }
+.slot.dim { opacity: .35; }
 
-  #tip{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);
-    font-size:12px;color:var(--accent);text-shadow:0 1px 3px #000;text-align:center;
-    opacity:0;transition:opacity .25s}
-  #tip.show{opacity:1}
+#ammo { position: fixed; right: 18px; bottom: 18px; padding: 9px 13px; text-align: right; }
+#ammo-mag { font-size: 19px; font-weight: 700; }
+#ammo-mag small { font-size: 12px; color: var(--ink-dim); font-weight: 400; }
+#ammo-rl { font-size: 10px; color: var(--accent); letter-spacing: .1em; min-height: 12px; }
 
-  #crosshair-note{position:absolute;left:50%;top:50%}
-  .hidden{display:none!important}
+#buildmenu { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); padding: 8px 10px; }
+#buildmenu .hint { font-size: 10px; color: var(--ink-dim); text-align: center; margin-bottom: 6px; }
+#buildmenu .row { display: flex; gap: 6px; }
+.bpiece { width: 72px; padding: 6px 4px; background: var(--panel2); border: 1px solid var(--edge2); border-radius: 6px;
+  text-align: center; font-size: 9px; cursor: pointer; color: var(--ink-dim); }
+.bpiece svg { width: 30px; height: 30px; color: var(--ink); display: block; margin: 0 auto 3px; }
+.bpiece.sel { border-color: var(--accent2); color: var(--ink); }
+.bpiece.cant { opacity: .42; }
+
+#tip { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); padding: 6px 14px; font-size: 13px;
+  color: var(--accent2); background: rgba(14,12,9,.85); border: 1px solid var(--edge2); border-radius: 6px;
+  opacity: 0; transition: opacity .25s; }
+#tip.show { opacity: 1; }
+
+.modal { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 30; padding: 16px 18px;
+  background: var(--panel2); border: 1px solid var(--edge); border-radius: 10px; min-width: 430px;
+  box-shadow: 0 0 0 100vmax rgba(8,7,5,.55), 0 8px 40px rgba(0,0,0,.6); font-size: 13px; }
+.modal h3 { margin: 0 0 10px; color: var(--accent); font-size: 15px; }
+.modal .cols { display: flex; gap: 22px; }
+.modal .col h5 { margin: 4px 0 7px; font-size: 11px; color: var(--ink-dim); letter-spacing: .08em; }
+.modal .trow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2.5px 0; }
+.modal .trow button { padding: 2px 8px; font-size: 11px; }
+.modal .close { margin-top: 12px; width: 100%; }
+.modal .strow { display: grid; grid-template-columns: 64px repeat(2, auto) 1fr repeat(2, auto) 56px; gap: 4px; align-items: center; padding: 2px 0; }
+.modal .strow button { padding: 1px 6px; font-size: 10px; }
+.modal .cnt { font-size: 11px; color: var(--ink-dim); text-align: right; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="hud">
   <div id="res" class="panel">
-    <div class="inv-h">Inventory</div>
-    <div class="inv-grid">
-      <div class="inv-cell"><span class="ic wood"></span><span class="n" id="r-wood">0</span></div>
-      <div class="inv-cell"><span class="ic stone"></span><span class="n" id="r-stone">0</span></div>
-      <div class="inv-cell"><span class="ic metal"></span><span class="n" id="r-metal">0</span></div>
-      <div class="inv-cell"><span class="ic scrap"></span><span class="n" id="r-scrap">0</span></div>
+    <h4>INVENTORY</h4>
+    <div class="row">
+      <div><span class="ic wood"></span><span id="r-wood">0</span></div>
+      <div><span class="ic stone"></span><span id="r-stone">0</span></div>
+      <div><span class="ic metal"></span><span id="r-metal">0</span></div>
+      <div><span class="ic scrap"></span><span id="r-scrap">0</span></div>
     </div>
   </div>
   <div id="leaderboard" class="panel">
-    <div class="inv-h">Leaderboard <span class="lb-legend">team · <b>K</b>ills · res</span></div>
+    <h4>LEADERBOARD</h4>
+    <div class="legend">team · kills · scrap · res</div>
     <div id="lb-rows"></div>
   </div>
-  <div id="mapbtn" class="panel">Map View</div>
-  <div id="ghostbtn" class="panel">Ghost</div>
-  <div id="rocketbtn" class="panel">Rapid Rockets</div>
-  <div id="refillbtn" class="panel">Refill All</div>
-  <div id="boosthardbtn" class="panel">Boost hard teams</div>
-  <div id="debugbtn" class="panel">Debug paths</div>
-
+  <div id="topbtns">
+    <button id="mapbtn">Map View</button>
+    <button id="ghostbtn">Ghost</button>
+    <button id="rocketbtn">Rapid Rockets</button>
+    <button id="refillbtn">Refill All</button>
+    <button id="boosthardbtn">Boost hard teams</button>
+    <button id="debugbtn">Debug paths</button>
+  </div>
+  <div id="help" class="panel min">
+    <h4>SCRAPLAND <span id="helpToggle">show</span></h4>
+    <div class="body">
+      Scavenge scrap, build a base, outlast 7 AI teams.<br><br>
+      <kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>1–9</kbd> slots<br>
+      <kbd>B</kbd> build · <kbd>R</kbd> reload/rotate · <kbd>Q</kbd> grenade/cycle<br>
+      <kbd>U</kbd> upgrade · <kbd>G</kbd> fence · <kbd>T</kbd> supply signal<br>
+      <kbd>E</kbd> interact · <kbd>Esc</kbd> close · wheel: cycle piece<br><br>
+      Trade zone at map centre is a safe zone. Cupboard claims and protects your base — keep it stocked. Beware monument guards and wildlife.<br><br>
+      Seed: <span id="seedval">—</span>
+    </div>
+  </div>
   <div id="timepanel" class="panel">
     <span id="playtime">0:00</span>
-    <span class="spd"><b class="spdbtn on" data-spd="1">1×</b><b class="spdbtn" data-spd="2">2×</b><b class="spdbtn" data-spd="5">5×</b></span>
+    <button class="spdbtn on" data-spd="1">1×</button>
+    <button class="spdbtn" data-spd="2">2×</button>
+    <button class="spdbtn" data-spd="5">5×</button>
   </div>
-
-  <div id="help" class="panel min">
-    <span class="toggle" id="helpToggle">show</span>
-    <h3>Guide</h3>
-    <div class="body">
-      <b>Move</b> <span class="k">W</span><span class="k">A</span><span class="k">S</span><span class="k">D</span> &nbsp; <b>Run</b> <span class="k">Shift</span><br>
-      <b>Aim</b> mouse · <b>Fire</b> LMB · <b>Reload</b> <span class="k">R</span> · <b>head shots</b> hurt more<br>
-      <b>Tool</b> (1): gather · melee · repair (costs res)<br>
-      Start with <b>tool + pistol</b> — buy other weapons at the <b>shop</b><br>
-      <b>Slots</b> <span class="k">1</span>–<span class="k">7</span> &nbsp; <b>Build</b> <span class="k">B</span> &nbsp; <b>Use</b> <span class="k">E</span><br>
-      <span class="k">E</span> fly copter · open doors / cupboard / shop<br>
-      Build: floor first, then walls on edges (not on foundations)<br>
-      <b>Q</b>/scroll piece · <b>R</b> rotate · <b>U</b> upgrade (wood→stone→metal→armored) · RMB remove<br>
-      <b>Cupboard</b> claims a base, stops decay &amp; <b>stores all your loot</b> — keep it stocked. Doors lock automatically.<br>
-      Hover a wall to see its HP. <b>Shop</b>: trade for <b>scrap</b> → weapons, ammo, explosives, armor, vehicles.<br>
-      Beware <b style="color:#e2664a">animals</b> &amp; monument <b style="color:#e2664a">guards</b>.<br>
-      <span style="opacity:.7">Seed: <b id="seedval">—</b></span>
-    </div>
+  <div id="vitals" class="panel">
+    <span class="lbl">HP</span>
+    <div id="hpbar"><div id="hpfill"></div></div>
+    <span id="hptxt">100</span>
   </div>
-
-  <div id="vitals" class="panel"><span class="hpicon">HP</span><div class="hpwrap"><div id="hpfill"></div></div><span id="hptxt">100</span></div>
-  <div id="buildmenu" class="panel hidden"></div>
+  <div id="buildmenu" class="panel hidden">
+    <div class="hint"><b>Q</b>/wheel piece · <b>R</b> rotate · <b>U</b> upgrade · <b>RMB</b> remove</div>
+    <div class="row" id="bpieces"></div>
+  </div>
   <div id="hotbar"></div>
-  <div id="ammo" class="panel hidden"><div class="mag" id="ammo-mag"></div><div class="rl" id="ammo-rl"></div></div>
+  <div id="ammo" class="panel hidden">
+    <div id="ammo-mag">0 <small>/ 0</small></div>
+    <div id="ammo-rl"></div>
+  </div>
   <div id="tip"></div>
-  <div id="store" class="hidden">
-    <div class="kp-title" id="store-title">Box</div>
-    <div id="store-rows"></div>
-    <div class="kp-cancel" id="store-close">Close (E / Esc)</div>
-  </div>
-  <div id="shop" class="hidden">
-    <div class="kp-title">Trade Shop</div>
-    <div class="shop-scrap">Scrap: <b id="shop-scrap">0</b></div>
-    <div class="shop-cols">
-      <div class="shop-col"><div class="shop-h">Sell → scrap</div><div id="shop-trades"></div></div>
-      <div class="shop-col"><div class="shop-h">Buy weapons + gear</div><div id="shop-buys"></div></div>
-    </div>
-    <div class="kp-cancel" id="shop-close">Close (E / Esc)</div>
-  </div>
+  <div id="store" class="modal hidden"></div>
+  <div id="shop" class="modal hidden"></div>
 </div>
-
-<script src="js/ai-core.js"></script>
-<script src="js/ai-base.js"></script>
-<script src="js/ai-heli.js"></script>
-<script src="js/ai-expand.js"></script>
-<script src="js/ai-hooks.js"></script>
-<script src="js/ai-update.js"></script>
-<script src="js/ai-render.js"></script>
-<script src="js/config.js"></script>
-<script src="js/state.js"></script>
-<script src="js/core.js"></script>
-<script src="js/world.js"></script>
-<script src="js/actions.js"></script>
-<script src="js/combat.js"></script>
-<script src="js/animals.js"></script>
-<script src="js/building.js"></script>
-<script src="js/update.js"></script>
-<script src="js/render.js"></script>
-<script src="js/effects.js"></script>
-<script src="js/hud.js"></script>
-<script src="js/boot.js"></script>
+<script src="dist/game.js"></script>
 </body>
 </html>

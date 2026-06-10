@@ -1,52 +1,75 @@
 # SCRAPLAND
 
-A top-down survival game inspired by Rust built with Opus 4.8 over a weekend. Scavenge scrap, build and fortify a base, arm up at the trade zone, and outlast rival AI teams that gather, fortify, and raid each other across a large, procedurally-built map.
+A top-down survival game inspired by Rust. Scavenge scrap, build and fortify a
+base, arm up at the trade zone, and outlast 7 rival AI teams that gather,
+fortify, and raid each other across a large, procedurally-built map.
 
-Features: weather system (rain/fog/day/night), multiple biomes (desert/winter/jungle), animal system, base building, raids, trade zone, monuments.
-
-Runs entirely in the browser — no build step, no dependencies, no server.
-
-<img width="1283" height="1278" alt="Screenshot 2026-06-01 at 7 50 13 AM" src="https://github.com/user-attachments/assets/6ae6d535-1661-47aa-9e25-38f7023b1cce" />
-
+Features: coordinated AI raids, build-first economy, weather + day/night with
+dynamic lighting, three biomes, wildlife, monuments + guards, quarry capture,
+armored convoy, patrol helicopter, locked crates, trains, airdrops.
 
 ## Play
 
-Download or clone the repo, then open `index.html` in any modern browser
-(Chrome, Edge, Firefox, or Safari). Double-clicking the file works.
+Clone the repo and open `index.html` in any modern browser — the committed
+bundle (`dist/game.js`) means double-clicking the file just works.
 
 ```
 git clone https://github.com/jmtame/scrapland.git
 cd scrapland
-open index.html      # macOS — or just double-click the file
+open index.html
 ```
-
-`index.html` holds the markup and loads the code from `js/` — classic scripts
-sharing one global scope (game systems plus the `ai-*.js` enemy AI). No build
-step; keep the folder together.
 
 ## Controls
 
 ```
-Move             W A S D
-Run              hold Shift
-Aim / shoot      mouse — hold left button to fire
-Reload           R
-Interact         E    enter/exit vehicles, open the trade store
-Weapon slots     1 – 9
-Throw grenade    Q
-Place fence      G    drop wood cover in front of you
+Move             W A S D        Run            hold Shift
+Aim / shoot      mouse          Reload         R
+Interact         E              Weapon slots   1 – 9
+Throw grenade    Q              Place fence    G
+Supply signal    T
 
-Build mode       B
-  rotate piece     R
-  cycle piece      mouse wheel  (or Q)
-  upgrade          U    also upgrades a turret under the cursor
-Close menu       Esc
+Build mode       B   (slot 6)
+  cycle piece      Q / mouse wheel
+  rotate           R
+  upgrade          U   (also upgrades a turret under the cursor)
+  remove           right-click
 ```
 
-## Notes
+## Architecture (v2)
 
-The AI teams run a full build-first economy: they start with nothing, gather
-scrap, found bases, hire workers up to a team cap (16 units for hard teams,
-8 otherwise), buy weapons and explosives at the trade zone, and launch
-coordinated raids — breaching walls to reach a base's tool cupboard. Watch the
-map collapse from many teams down to a winner.
+The game is a deterministic, fixed-timestep simulation with a separate
+renderer:
+
+- `src/sim/` — pure game logic, no DOM. Runs identically in the browser and
+  headless in node. Seeded RNG: a seed fully reproduces a match.
+- `src/sim/nav.js` — wall- and door-aware A* over a 64 px grid. Doors are
+  graph edges (owners path through their own doors; raiders must breach).
+  A goal-progress watchdog repaths with cell penalties; units never phase,
+  teleport, or wall-follow.
+- `src/sim/ai/` — per-unit committed-task FSM (gather / build / defend /
+  raid / return / trade) under a per-team commander that assigns defenders,
+  one sticky builder, and rocketers; raids stage at a standoff ring, focus one
+  breach piece on the cheapest path to the tool cupboard, then push in.
+- `src/client/` — canvas renderer: terrain pre-baked into chunks, y-sorted
+  sprites, day/night lighting with point lights, weather, DOM HUD.
+
+### Develop
+
+```
+npm install          # esbuild only
+npm run build        # src/ → dist/game.js  (commit the bundle)
+npm run watch
+npm test             # tests-v2/verify.js — world/combat invariants + match bars
+node tests-v2/sim_match.js 15 42    # headless match: minutes, seed
+```
+
+The headless suite checks, per seed: anti-stuck bars (peak non-raid stuck
+< 30 s — typical peaks are under 15 s), zero wall-phasing, zero forced
+teleports, no unit sealed inside its own base, founding < 3 min, active
+economy, ricochet wall-safety, explosion line-of-sight gating, repair locks.
+
+### Known follow-up
+
+Match pacing: raids breach and tool cupboards fall, but full team
+eliminations can still run long on some seeds. Tuning assault tempo
+(rocket throughput at the wall, post-breach pushes) is the next round.
