@@ -102,7 +102,10 @@ export function updateUnit(S, u, dt) {
     if (u.defHold <= 0) { u.state = 'gather'; u.defendT = 0; u.defTgt = null; }
   } else if (u.state === 'raid' && (!raidAlive || (team && brain.decaying))) {
     u.raid = null; u.wasRaid = false; u.state = 'gather';
-  } else if (u.defDuty && (brain.attack || brain.urgent) && homeD > 340 && u.state !== 'raid' && u.state !== 'trade') {
+  } else if (u.defDuty && (brain.attackers > 0 || brain.urgent) && homeD > 340 && u.state !== 'raid' && u.state !== 'trade') {
+    // rally home only for an ACTUAL perimeter attack (attackers/explosives),
+    // never for distant intel — otherwise gatherers ping-pong at the base
+    // while raids are merely being planned against them (Base-3 camping bug)
     u.state = 'return';
   } else if (u.state === 'gather' && gatherDone(S, u, team, brain)) {
     u.state = plan(S, u, team, brain);
@@ -1007,7 +1010,7 @@ function harvestOrWalk(S, u, node, dt) {
     if (got > 0) {
       node.amount -= got; node.regen = 0;
       u.inv[node.base] += got;
-      S.events.push({ type: 'harvest', x: node.x, y: node.y, kind: node.base });
+      S.events.push({ type: 'harvest', x: node.x, y: node.y, kind: node.base, jack: u.jack });
     }
   }
 }

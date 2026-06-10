@@ -27,6 +27,12 @@ const GUNS = {
   tool: (g) => { g.add(box(0x5b4226, 13, 3, 3, 9, 0, 0)); g.add(box(0xb9c0c7, 4, 8, 3.4, 16, 1, 0)); },
   rocket: (g) => { g.add(box(0x39402f, 22, 6.5, 6, 14, 1, 0)); g.add(box(0xff9b3d, 3, 7, 6.4, 25, 1, 0)); },
   hammer: (g) => { g.add(box(0x5b4226, 11, 3, 3, 8, 0, 0)); g.add(box(0x9aa1a8, 4, 7, 4.4, 14, 1, 0)); },
+  jack: (g) => {
+    g.add(box(0x1c1c1c, 4, 4, 3.4, 6, 1, 0));            // grip
+    g.add(box(0xcaa23a, 11, 9, 5.5, 13, 0, 0));          // yellow housing
+    g.add(box(0x3a3f37, 4, 5.5, 4, 20, -1, 0));          // collar
+    g.add(box(0xb9c0c7, 11, 2.6, 2.6, 27, -2, 0));       // chisel
+  },
 };
 
 export function makeHumanoid(colHex, opts = {}) {
@@ -119,15 +125,25 @@ export function makeHumanoid(colHex, opts = {}) {
       parts.torsoShade.material = mat(shade(hex, 0.7));
       band.material = mat(hex);
     },
-    animate(t, moveAmt, gathering) {
+    animate(t, moveAmt, gathering, jack) {
       const ph = t * 11 + g.userData.phase;
       const swing = Math.sin(ph) * 0.75 * moveAmt;
       parts.legL.rotation.z = swing;
       parts.legR.rotation.z = -swing;
       parts.armL.rotation.z = -swing * 0.7;
       g.position.y = Math.abs(Math.sin(ph)) * 1.4 * moveAmt;
-      if (gathering) parts.armR.rotation.z = -0.5 + Math.sin(t * 9) * 0.55;
-      else parts.armR.rotation.z = 0;
+      if (gathering && jack) {
+        // jackhammer: braced arm + violent high-frequency judder through the
+        // whole body (the model shakes, not the camera)
+        parts.armR.rotation.z = -0.22 + Math.sin(t * 62) * 0.05;
+        const jx = Math.sin(t * 57) * 1.5, jy = Math.sin(t * 71) * 1.1;
+        g.position.y += Math.abs(jy) * 0.8;
+        g.userData.judder = { x: jx, z: Math.cos(t * 49) * 1.3 };
+      } else {
+        g.userData.judder = null;
+        if (gathering) parts.armR.rotation.z = -0.5 + Math.sin(t * 9) * 0.55;
+        else parts.armR.rotation.z = 0;
+      }
     },
   };
   g.userData.setGun(opts.gun || 'pistol');

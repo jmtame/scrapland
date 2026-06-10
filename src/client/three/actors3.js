@@ -107,6 +107,89 @@ export function makeActors3(S, scene) {
   const fpR = new THREE.Matrix4();
   const fpS = new THREE.Vector3();
 
+  // harvest debris: chunks knocked off nodes (gravity + tumble) and, with the
+  // jackhammer, hot sparks. Client-only; spawned from sim 'harvest' events.
+  const DMAX = 64;
+  const debris = [];
+  const debrisI = new THREE.InstancedMesh(GEO.box, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), DMAX);
+  debrisI.frustumCulled = false;
+  scene.add(debrisI);
+  const dM = new THREE.Matrix4();
+  const dC = new THREE.Color();
+  const DEB_COL = { wood: 0x8a6230, stone: 0x84898f, metal: 0xc89544 };
+  const SMAX = 90;
+  const sparks = [];
+  const sGeo = new THREE.BufferGeometry();
+  const sPos = new Float32Array(SMAX * 3);
+  sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  const sparkPts = new THREE.Points(sGeo, new THREE.PointsMaterial({
+    color: 0xffe9a3, size: 6, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  sparkPts.frustumCulled = false;
+  scene.add(sparkPts);
+
+  function spawnHarvestFx(e) {
+    const n = e.jack ? 5 : 3;
+    for (let i = 0; i < n; i++) {
+      if (debris.length >= DMAX) debris.shift();
+      const a = Math.random() * TAU;
+      debris.push({
+        x: e.x + Math.cos(a) * 6, y: e.y + Math.sin(a) * 6, h: 18 + Math.random() * 14,
+        vx: Math.cos(a) * (40 + Math.random() * 70), vy: Math.sin(a) * (40 + Math.random() * 70),
+        vh: 60 + Math.random() * 90, life: 0.85, rot: Math.random() * 7, vrot: (Math.random() - 0.5) * 14,
+        s: 2.2 + Math.random() * (e.jack ? 3.4 : 2.2), col: DEB_COL[e.kind] || 0x8a6230,
+      });
+    }
+    if (e.jack) {
+      for (let i = 0; i < 7; i++) {
+        if (sparks.length >= SMAX) sparks.shift();
+        const a = Math.random() * TAU;
+        sparks.push({
+          x: e.x, y: e.y, h: 16,
+          vx: Math.cos(a) * (90 + Math.random() * 160), vy: Math.sin(a) * (90 + Math.random() * 160),
+          vh: 40 + Math.random() * 120, life: 0.22 + Math.random() * 0.14,
+        });
+      }
+    }
+  }
+
+  function updateHarvestFx(dt) {
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      d.life -= dt;
+      if (d.life <= 0) { debris.splice(i, 1); continue; }
+      d.vh -= 320 * dt;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.h += d.vh * dt;
+      if (d.h < 1.5) { d.h = 1.5; d.vh *= -0.35; d.vx *= 0.6; d.vy *= 0.6; }
+      d.rot += d.vrot * dt;
+    }
+    debris.forEach((d, i) => {
+      dM.makeRotationY(d.rot).scale(new THREE.Vector3(d.s, d.s, d.s)).setPosition(d.x, d.h, d.y);
+      debrisI.setMatrixAt(i, dM);
+      dC.setHex(d.col);
+      debrisI.setColorAt(i, dC);
+    });
+    debrisI.count = debris.length;
+    debrisI.instanceMatrix.needsUpdate = true;
+    if (debrisI.instanceColor) debrisI.instanceColor.needsUpdate = true;
+    let sn = 0;
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.life -= dt;
+      if (s.life <= 0) { sparks.splice(i, 1); continue; }
+      s.vh -= 260 * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt; s.h = Math.max(1, s.h + s.vh * dt);
+    }
+    for (const s of sparks) {
+      if (sn >= SMAX) break;
+      sPos[sn * 3] = s.x; sPos[sn * 3 + 1] = s.h; sPos[sn * 3 + 2] = s.y;
+      sn++;
+    }
+    sGeo.setDrawRange(0, sn);
+    sGeo.attributes.position.needsUpdate = true;
+  }
+
   // particles
   const PMAX = 1200;
   const pGeo = new THREE.BufferGeometry();
@@ -143,7 +226,8 @@ export function makeActors3(S, scene) {
     u.setColor(colHex);
     if (opts.gun) u.setGun(opts.gun);
     u.setArmor(opts.bodyArmor || 0, opts.facemask || 0);
-    u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering);
+    u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering, !!opts.jack);
+    if (u.judder) { g.position.x += u.judder.x; g.position.z += u.judder.z; }
   }
 
   return {
@@ -166,8 +250,8 @@ export function makeActors3(S, scene) {
         const g = persons.get(u, colHex, u.gun);
         const moveAmt = Math.min(1, Math.hypot(u.vx, u.vy) / 120);
         syncPerson(g, u.x, u.y, u.angle, colHex, {
-          gun: u.gathering ? 'tool' : u.gun, moveAmt, gathering: u.gathering,
-          bodyArmor: u.bodyArmor, facemask: u.facemask,
+          gun: u.gathering ? (u.jack ? 'jack' : 'tool') : u.gun, moveAmt, gathering: u.gathering,
+          jack: u.jack, bodyArmor: u.bodyArmor, facemask: u.facemask,
         });
       }
       // ---- player ----
@@ -175,10 +259,11 @@ export function makeActors3(S, scene) {
       if (!p.inCopter) {
         const g = persons.get(p, 0x7a8a50, 'pistol');
         const moveAmt = p.moving ? 1 : 0;
+        const jacking = S.slot === 0 && S.jackhammer;
         syncPerson(g, p.x, p.y, p.angle, p.hurt > 0 ? 0xc47a5e : 0x7a8a50, {
-          gun: SLOT_GUN[S.slot] || 'pistol', moveAmt,
+          gun: S.slot === 0 && S.jackhammer ? 'jack' : SLOT_GUN[S.slot] || 'pistol', moveAmt,
           gathering: p.swing > 0 && S.slot === 0,
-          bodyArmor: p.bodyArmor, facemask: p.facemask,
+          jack: jacking, bodyArmor: p.bodyArmor, facemask: p.facemask,
         });
         if (p.dead) g.visible = false;
       }
@@ -201,7 +286,12 @@ export function makeActors3(S, scene) {
       for (const a of S.animals) {
         if (a.dead || !rig.inView(a.x, a.y, 150)) continue;
         const g = animals.get(a, a.type, a.r);
-        g.position.set(a.x, 0, a.y);
+        // alligators submerge in water: body sinks below the surface plane,
+        // only the head (and a hint of ridge) stays visible
+        let sink = 0;
+        if (a.type === 'alligator' && S.world.lakeAt(a.x, a.y)) sink = a.r * 0.62;
+        g.userData.sinkY = (g.userData.sinkY ?? 0) + (sink - (g.userData.sinkY ?? 0)) * Math.min(1, dt * 5);
+        g.position.set(a.x, -g.userData.sinkY, a.y);
         const sp = Math.hypot(a.vx || 0, a.vy || 0);
         const ang = sp > 2 ? Math.atan2(a.vy, a.vx) : a.dir;
         g.rotation.y = -ang;
@@ -460,6 +550,10 @@ export function makeActors3(S, scene) {
         g.position.set(S.muzzle.x, 18, S.muzzle.y);
         g.material.opacity = S.muzzle.t / 0.08;
       }
+      // ---- harvest FX (from sim events) ----
+      for (const e of S.events) if (e.type === 'harvest' && rig.inView(e.x, e.y, 300)) spawnHarvestFx(e);
+      updateHarvestFx(dt);
+
       // ---- footprints ----
       let fn = 0;
       for (const f of S.footprints) {

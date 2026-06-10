@@ -188,7 +188,7 @@ function gatherSwing(S) {
     S.inv[node.base] += got;
     addFloat(S, node.x, node.y - node.r, '+' + got + ' ' + node.base, '#d8e0c2');
     burst(S, node.x, node.y, '#caa07a', S.jackhammer ? 6 : 3, 140);
-    S.events.push({ type: 'harvest', x: node.x, y: node.y, kind: node.base });
+    S.events.push({ type: 'harvest', x: node.x, y: node.y, kind: node.base, jack: S.jackhammer });
   }
 }
 
