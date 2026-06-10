@@ -26,9 +26,9 @@ export function makeWeather3(S, scene) {
   const ensureClouds = () => {
     if (cloudSprites.length || !S.clouds) return;
     for (const cl of S.clouds) {
-      const m = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xf4f8fc, transparent: true, opacity: 0.5 * cl.op, depthWrite: false });
+      const m = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xeef3f7, transparent: true, opacity: 0.28 * cl.op, depthWrite: false });
       const s = new THREE.Sprite(m);
-      s.scale.set(cl.r * 2.4, cl.r * 1.5, 1);
+      s.scale.set(cl.r * 3.2, cl.r * 1.8, 1);
       scene.add(s);
       // flat shadow plane on the ground (not a billboard)
       const sh = new THREE.Mesh(
@@ -90,7 +90,7 @@ export function makeWeather3(S, scene) {
         geo.attributes.position.needsUpdate = true;
       }
       for (const { cl, s, sh } of cloudSprites) {
-        s.position.set(cl.x, 620, cl.y);
+        s.position.set(cl.x, 1050, cl.y);
         sh.position.set(cl.x + 64, 2.5, cl.y + 86);
       }
       for (const { f, s } of fogSprites) {

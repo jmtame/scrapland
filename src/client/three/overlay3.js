@@ -42,10 +42,10 @@ export function makeOverlay3(S, view, rig) {
       ctx.clearRect(0, 0, VW, VH);
       const t = S.t;
 
-      // floats (world-anchored text)
+      // floats (world-anchored text; hidden in map view — they're clutter there)
       ctx.font = 'bold 13px Trebuchet MS';
       ctx.textAlign = 'center';
-      for (const f of S.floats) {
+      for (const f of view.godView ? [] : S.floats) {
         const p = P(f.ox, f.y, 40);
         if (p.behind) continue;
         const a = Math.max(0, f.life / f.max);

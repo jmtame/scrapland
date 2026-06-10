@@ -8,13 +8,13 @@ import { clamp, lerp } from '../../sim/util.js';
 export function makeScene(S, view) {
   const renderer = new THREE.WebGLRenderer({ canvas: view.canvas, antialias: true });
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
-  renderer.setSize(view.VW, view.VH, false);
+  renderer.setSize(view.VW, view.VH); // updateStyle: keep CSS size = viewport
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d2430);
 
-  const camera = new THREE.PerspectiveCamera(50, view.VW / view.VH, 10, 26000);
+  const camera = new THREE.PerspectiveCamera(50, view.VW / view.VH, 10, 60000);
 
   // lights — bright, readable at all times of day (night mode stays removed)
   const hemi = new THREE.HemisphereLight(0xeaf2f8, 0x4a4438, 0.95);
@@ -45,18 +45,30 @@ export function makeScene(S, view) {
     resize() {
       camera.aspect = view.VW / view.VH;
       camera.updateProjectionMatrix();
-      renderer.setSize(view.VW, view.VH, false);
+      renderer.setSize(view.VW, view.VH);
     },
 
     update(dt) {
       const p = S.player;
-      let tx = p.x, ty = p.y, tdist = 1150, telev = 0.96;
+      let tx = p.x, ty = p.y, tdist = 1500, telev = 0.96;
       if (view.godView) {
+        // near-top-down, distance computed to FIT the whole map at any aspect
         tx = WORLD.w / 2; ty = WORLD.h / 2;
-        tdist = 11200; telev = 1.25;
+        telev = 1.52;
+        const tanV = Math.tan((camera.fov / 2) * Math.PI / 180);
+        const fitH = (WORLD.h / 2 + 500) / tanV;
+        const fitW = (WORLD.w / 2 + 500) / (tanV * camera.aspect);
+        tdist = Math.max(fitH, fitW) * 1.02;
       } else if (p.inCopter && S.copter) {
         const spd = Math.hypot(S.copter.vx, S.copter.vy);
-        tdist = 1500 + spd * 0.9;
+        tdist = 1850 + spd * 0.9;
+      }
+      // snap (no cross-map lerp) when toggling map view — the camera must be
+      // ON the player the instant you exit the map
+      if (rig._wasGod !== view.godView) {
+        rig._wasGod = view.godView;
+        rig.cx = tx; rig.cy = ty;
+        rig.dist = tdist; rig.elev = telev;
       }
       const k = Math.min(1, dt * (view.godView ? 6 : 5));
       rig.cx = lerp(rig.cx, tx, k);

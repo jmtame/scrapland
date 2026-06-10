@@ -15,8 +15,8 @@ export function makeBuildings3(S, scene) {
   const ores = S.resources.filter(n => n.type === 'metal');
 
   const trunkI = new THREE.InstancedMesh(GEO.cyl, mat(0x5d3f20), trees.length);
-  const canopyI = new THREE.InstancedMesh(GEO.cone, mat(0x4b6a31), trees.length);
-  const canopy2I = new THREE.InstancedMesh(GEO.cone, mat(0x6f944c), trees.length);
+  const canopyI = new THREE.InstancedMesh(GEO.cone, mat(0x35511f), trees.length);
+  const canopy2I = new THREE.InstancedMesh(GEO.cone, mat(0x507a30), trees.length);
   const stoneI = new THREE.InstancedMesh(GEO.ico, mat(0x8d948b), stones.length);
   const oreI = new THREE.InstancedMesh(GEO.ico, mat(0x8d774a), ores.length);
   const oreTipI = new THREE.InstancedMesh(GEO.ico, mat(0xd8a850, { emissive: 0x6a4a10 }), ores.length);
