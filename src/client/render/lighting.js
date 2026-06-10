@@ -25,8 +25,13 @@ export function makeLighting(S, view, cam) {
   return {
     lightLevel,
     draw(ctx) {
-      // Night mode removed by request: days roll into a barely-tinted dusk
-      // (≤ 8% alpha) and the map view is never tinted at all.
+      // NIGHT MODE REMOVED (player request). The screen-darkening layer also
+      // had a compounding-alpha bug (canvas never cleared between frames),
+      // which is why even low tint values blacked out the scene. The whole
+      // pass is disabled; the day/night clock still exists for cloud
+      // brightness only.
+      return;
+      /* eslint-disable no-unreachable */
       if (view.godView) return;
       const light = lightLevel();
       const dark = 1 - light;

@@ -7637,6 +7637,7 @@
     return {
       lightLevel,
       draw(ctx) {
+        return;
         if (view2.godView) return;
         const light = lightLevel();
         const dark = 1 - light;
