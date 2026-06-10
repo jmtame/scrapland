@@ -94,6 +94,19 @@ export function makeActors3(S, scene) {
   const simpleMeshes = new Pool(scene, (build) => build());
   const glows = new Pool(scene, (hex, scale) => glowSprite(hex, scale));
 
+  // footprints: instanced flat decals, shrink-fading with age (sim keeps 10 s)
+  const FPMAX = 700;
+  const fpI = new THREE.InstancedMesh(
+    GEO.quad,
+    new THREE.MeshBasicMaterial({ color: 0x241c12, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide }),
+    FPMAX,
+  );
+  fpI.frustumCulled = false;
+  scene.add(fpI);
+  const fpM = new THREE.Matrix4();
+  const fpR = new THREE.Matrix4();
+  const fpS = new THREE.Vector3();
+
   // particles
   const PMAX = 1200;
   const pGeo = new THREE.BufferGeometry();
@@ -447,6 +460,25 @@ export function makeActors3(S, scene) {
         g.position.set(S.muzzle.x, 18, S.muzzle.y);
         g.material.opacity = S.muzzle.t / 0.08;
       }
+      // ---- footprints ----
+      let fn = 0;
+      for (const f of S.footprints) {
+        if (fn >= FPMAX) break;
+        const fade = 1 - f.t / 10;
+        if (fade < 0.06 || !rig.inView(f.x, f.y, 60)) continue;
+        const s = 6.2 * (0.45 + 0.55 * fade);
+        fpM.makeRotationY(-f.a);
+        fpR.makeRotationX(-Math.PI / 2);
+        fpM.multiply(fpR);
+        fpS.set(s, s * 0.55, 1);
+        fpM.scale(fpS);
+        fpM.setPosition(f.x, 0.45 + (fn % 9) * 0.025, f.y);
+        fpI.setMatrixAt(fn, fpM);
+        fn++;
+      }
+      fpI.count = fn;
+      fpI.instanceMatrix.needsUpdate = true;
+
       // ---- particles ----
       let pi = 0;
       for (const pt of S.particles) {
