@@ -339,13 +339,23 @@ export function makeActors3(S, scene) {
       // ---- projectiles ----
       for (const b of S.bullets) {
         const g = simpleMeshes.get(b, () => {
-          const m2 = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffe9a3, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
-          m2.scale.set(26, 2.5, 2.5);
-          return m2;
+          const gg = new THREE.Group();
+          // bright opaque core — reads against any background
+          const core = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffe9a3 }));
+          core.scale.set(34, 3.6, 3.6);
+          gg.add(core);
+          // additive halo around it
+          const halo = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffe9a3, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+          halo.scale.set(40, 8, 8);
+          gg.add(halo);
+          gg.userData = { core, halo };
+          return gg;
         });
-        g.position.set(b.x, 16, b.y);
+        g.position.set(b.x, 18, b.y);
         g.rotation.y = -Math.atan2(b.vy, b.vx);
-        g.material.color.setHex(b.col === 'hmg' ? 0xff5a2a : b.ricochet ? 0x86d8ff : 0xffe9a3);
+        const col = b.col === 'hmg' ? 0xff5a2a : b.ricochet ? 0x86d8ff : 0xffe9a3;
+        g.userData.core.material.color.setHex(col);
+        g.userData.halo.material.color.setHex(col);
       }
       for (const r of S.rockets) {
         const g = simpleMeshes.get(r, () => {
