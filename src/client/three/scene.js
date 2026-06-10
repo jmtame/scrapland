@@ -87,8 +87,12 @@ export function makeScene(S, view) {
         900 + light * 600,
         cy + Math.sin(sunA) * 1400 - 400,
       );
-      // camera-space view rect cache for inView culling (generous radius)
-      rig._viewR = rig.dist * 1.35;
+      // fog scales with camera distance (god view must see the whole map)
+      scene.fog.near = rig.dist * 2.2;
+      scene.fog.far = rig.dist * 8;
+      // camera-space view rect cache for inView culling (generous radius —
+      // a tilted camera sees far up-screen)
+      rig._viewR = rig.dist * 1.9;
     },
 
     render() { renderer.render(scene, camera); },

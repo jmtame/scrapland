@@ -30,9 +30,12 @@ export function makeWeather3(S, scene) {
       const s = new THREE.Sprite(m);
       s.scale.set(cl.r * 2.4, cl.r * 1.5, 1);
       scene.add(s);
-      const shm = new THREE.SpriteMaterial({ map: blobTexture(), transparent: true, opacity: 0.5 * cl.op, depthWrite: false });
-      const sh = new THREE.Sprite(shm);
-      sh.scale.set(cl.r * 2.2, cl.r * 1.4, 1);
+      // flat shadow plane on the ground (not a billboard)
+      const sh = new THREE.Mesh(
+        new THREE.CircleGeometry(cl.r * 1.1, 12),
+        new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity: 0.55 * cl.op, depthWrite: false }),
+      );
+      sh.rotation.x = -Math.PI / 2;
       scene.add(sh);
       cloudSprites.push({ cl, s, sh });
     }

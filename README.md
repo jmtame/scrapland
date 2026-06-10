@@ -50,17 +50,19 @@ renderer:
   raid / return / trade) under a per-team commander that assigns defenders,
   one sticky builder, and rocketers; raids stage at a standoff ring, focus one
   breach piece on the cheapest path to the tool cupboard, then push in.
-- `src/client/` — canvas renderer: terrain pre-baked into chunks, y-sorted
-  sprites, day/night lighting with point lights, weather, DOM HUD.
+- `src/client/` — three.js renderer (WebGL): tilted low-poly 3D — extruded
+  bases, instanced nature, sun day-cycle (never dark), glow FX, weather —
+  plus a 2D overlay for markers/banners and the DOM HUD.
 
 ### Develop
 
 ```
-npm install          # esbuild only
+npm install          # esbuild + three
 npm run build        # src/ → dist/game.js  (commit the bundle)
 npm run watch
 npm test             # tests-v2/verify.js — world/combat invariants + match bars
 node tests-v2/sim_match.js 15 42    # headless match: minutes, seed
+node tests-v2/shot.js out.png 42 5  # headless debug-map snapshot (sim only)
 ```
 
 The headless suite checks, per seed: anti-stuck bars (peak non-raid stuck

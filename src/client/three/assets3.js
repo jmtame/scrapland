@@ -79,11 +79,14 @@ export function glowSprite(hex, scale = 60) {
   s.scale.set(scale, scale, 1);
   return s;
 }
+// flat ground-shadow disc (a real plane, NOT a billboard sprite)
+let shadowGeo = null;
 export function blobShadow(scale = 40) {
-  const m = new THREE.SpriteMaterial({ map: blobTexture(), transparent: true, depthWrite: false, rotation: 0 });
-  const s = new THREE.Sprite(m);
-  s.scale.set(scale, scale * 0.62, 1);
-  s.material.rotation = 0;
+  if (!shadowGeo) shadowGeo = new THREE.CircleGeometry(0.5, 14);
+  const m = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false });
+  const s = new THREE.Mesh(shadowGeo, m);
+  s.rotation.x = -Math.PI / 2;
+  s.scale.set(scale, scale * 0.8, 1);
   return s;
 }
 
