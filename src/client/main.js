@@ -22,7 +22,7 @@ function start() {
     speed: 1, godView: false, debugPaths: false,
   };
   const rig = makeScene(S, view);
-  makeTerrain3(S, rig.scene);
+  const terrain = makeTerrain3(S, rig.scene);
   const buildings = makeBuildings3(S, rig.scene);
   const actors = makeActors3(S, rig.scene);
   const weather = makeWeather3(S, rig.scene);
@@ -99,6 +99,7 @@ function start() {
     }
     if (ticks >= maxTicks) acc = 0;
     rig.update(elapsed);
+    terrain.sync(elapsed, S, rig);
     buildings.sync(elapsed);
     actors.sync(elapsed, rig);
     weather.sync(elapsed, rig);

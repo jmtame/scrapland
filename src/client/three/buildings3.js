@@ -15,28 +15,48 @@ export function makeBuildings3(S, scene) {
   const ores = S.resources.filter(n => n.type === 'metal');
 
   const trunkI = new THREE.InstancedMesh(GEO.cyl, mat(0x5d3f20), trees.length);
-  const canopyI = new THREE.InstancedMesh(GEO.cone, mat(0x35511f), trees.length);
-  const canopy2I = new THREE.InstancedMesh(GEO.cone, mat(0x507a30), trees.length);
+  const canopyI = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), trees.length);
+  const canopy2I = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), trees.length);
+  const snowCapI = new THREE.InstancedMesh(GEO.cone, mat(0xeef4f9), trees.length);
   const stoneI = new THREE.InstancedMesh(GEO.ico, mat(0x8d948b), stones.length);
   const oreI = new THREE.InstancedMesh(GEO.ico, mat(0x8d774a), ores.length);
   const oreTipI = new THREE.InstancedMesh(GEO.ico, mat(0xd8a850, { emissive: 0x6a4a10 }), ores.length);
-  for (const m2 of [trunkI, canopyI, canopy2I, stoneI, oreI, oreTipI]) {
+  for (const m2 of [trunkI, canopyI, canopy2I, snowCapI, stoneI, oreI, oreTipI]) {
     m2.frustumCulled = false;
     scene.add(m2);
   }
+  // per-tree canopy color variation (and winter detection for snow caps)
+  const C1 = new THREE.Color(), C2 = new THREE.Color();
+  const treeWinter = [];
+  trees.forEach((n, i) => {
+    const j = 0.85 + ((n.seed * 7.3) % 1) * 0.4;
+    const winter = S.world.biomeAt(n.x, n.y) === 'winter';
+    treeWinter.push(winter);
+    C1.setHex(winter ? 0x3c5530 : 0x35511f).multiplyScalar(j);
+    C2.setHex(winter ? 0x5b7a4a : 0x507a30).multiplyScalar(j);
+    canopyI.setColorAt(i, C1);
+    canopy2I.setColorAt(i, C2);
+  });
+  if (canopyI.instanceColor) canopyI.instanceColor.needsUpdate = true;
+  if (canopy2I.instanceColor) canopy2I.instanceColor.needsUpdate = true;
   const M = new THREE.Matrix4();
   let nodeRefresh = 0;
 
   function refreshNodes() {
     trees.forEach((n, i) => {
       const s = n.amount <= 0 ? 0.001 : 0.55 + 0.45 * (n.amount / n.max);
-      M.makeScale(7 * s, 30 * s, 7 * s).setPosition(n.x, 15 * s, n.y);
+      const lean = ((n.seed * 13.7) % 1 - 0.5) * 0.12;
+      M.makeRotationZ(lean).scale(new THREE.Vector3(7 * s, 30 * s, 7 * s)).setPosition(n.x, 15 * s, n.y);
       trunkI.setMatrixAt(i, M);
-      M.makeScale(30 * s, 42 * s, 30 * s).setPosition(n.x, 36 * s, n.y);
+      M.makeRotationY(n.seed).scale(new THREE.Vector3(30 * s, 42 * s, 30 * s)).setPosition(n.x, 36 * s, n.y);
       canopyI.setMatrixAt(i, M);
-      M.makeScale(20 * s, 30 * s, 20 * s).setPosition(n.x + 4, 56 * s, n.y - 3);
+      M.makeRotationY(n.seed * 2).scale(new THREE.Vector3(20 * s, 30 * s, 20 * s)).setPosition(n.x + 4, 56 * s, n.y - 3);
       canopy2I.setMatrixAt(i, M);
+      const capS = treeWinter[i] ? s : 0.001;
+      M.makeScale(13 * capS, 12 * capS, 13 * capS).setPosition(n.x + 4, 70 * capS, n.y - 3);
+      snowCapI.setMatrixAt(i, M);
     });
+    snowCapI.instanceMatrix.needsUpdate = true;
     stones.forEach((n, i) => {
       const s = n.amount <= 0 ? 0.001 : (0.55 + 0.45 * (n.amount / n.max)) * n.r;
       M.makeRotationY(n.seed).scale(new THREE.Vector3(s, s * 0.75, s)).setPosition(n.x, s * 0.45, n.y);
@@ -96,6 +116,9 @@ export function makeBuildings3(S, scene) {
   });
   shrubI.frustumCulled = false;
   scene.add(shrubI);
+
+  // ---------- ambient ground scatter (client-only, deterministic) ----------
+  buildScatter(S, scene);
 
   // ---------- barrels & crates (visibility tracks hp) ----------
   const barrelMeshes = S.barrels.map((o) => {
@@ -334,6 +357,65 @@ export function makeBuildings3(S, scene) {
     },
   };
 }
+
+// grass tufts (jungle), pebbles (desert), snow lumps (winter) — pure visual
+// detail from a deterministic hash grid; no sim interaction, fully instanced.
+function buildScatter(S, scene) {
+  const { hash2 } = scatterHash;
+  const grass = [], pebbles = [], lumps = [];
+  const W = 13824, H = 9216;
+  for (let y = 120; y < H - 120; y += 150) {
+    for (let x = 120; x < W - 120; x += 150) {
+      const h = hash2((x / 150) | 0, (y / 150) | 0);
+      if (h > 0.62) continue;
+      const px = x + (h * 977 % 1) * 130, py = y + (h * 467 % 1) * 130;
+      if (!S.world.onLand(px, py) || S.world.lakeAt(px, py)) continue;
+      if (S.world.pathDist(px, py) < 40) continue;
+      const b = S.world.biomeAt(px, py);
+      if (b === 'jungle') grass.push({ x: px, y: py, h });
+      else if (b === 'desert') { if (h < 0.3) pebbles.push({ x: px, y: py, h }); }
+      else if (h < 0.4) lumps.push({ x: px, y: py, h });
+    }
+  }
+  const M = new THREE.Matrix4();
+  const C = new THREE.Color();
+  const grassI = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), grass.length || 1);
+  grass.forEach((g, i) => {
+    const s = 5 + g.h * 8;
+    M.makeRotationY(g.h * 6).scale(new THREE.Vector3(s, s * 1.8, s)).setPosition(g.x, s * 0.9, g.y);
+    grassI.setMatrixAt(i, M);
+    C.setHex(0x4a6a2e).multiplyScalar(0.8 + (g.h * 37 % 1) * 0.5);
+    grassI.setColorAt(i, C);
+  });
+  const pebbleI = new THREE.InstancedMesh(GEO.ico, mat(0xffffff), pebbles.length || 1);
+  pebbles.forEach((p, i) => {
+    const s = 3 + p.h * 8;
+    M.makeRotationY(p.h * 9).scale(new THREE.Vector3(s, s * 0.55, s)).setPosition(p.x, s * 0.3, p.y);
+    pebbleI.setMatrixAt(i, M);
+    C.setHex(0x9c8a60).multiplyScalar(0.85 + (p.h * 53 % 1) * 0.3);
+    pebbleI.setColorAt(i, C);
+  });
+  const lumpI = new THREE.InstancedMesh(GEO.sphere, mat(0xe8eff5), lumps.length || 1);
+  lumps.forEach((l, i) => {
+    const s = 6 + l.h * 12;
+    M.makeScale(s, s * 0.4, s * 0.8).setPosition(l.x, s * 0.16, l.y);
+    lumpI.setMatrixAt(i, M);
+  });
+  for (const m2 of [grassI, pebbleI, lumpI]) {
+    m2.frustumCulled = false;
+    if (m2.instanceColor) m2.instanceColor.needsUpdate = true;
+    scene.add(m2);
+  }
+}
+// tiny local hash (avoids importing sim utils into the render bundle twice)
+const scatterHash = {
+  hash2(x, y) {
+    let h = (x * 374761393 + y * 668265263) | 0;
+    h = (h ^ (h >> 13)) | 0;
+    h = Math.imul(h, 1274126177);
+    return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+  },
+};
 
 function buildMonument(S, scene, m, animated) {
   const g = new THREE.Group();

@@ -3,9 +3,11 @@
 // Pool pattern: sim object ref → mesh group, hidden when gone.
 import * as THREE from 'three';
 import { TILE, GUARD, OWNER } from '../../sim/config.js';
-import { GEO, mat, glowSprite, blobShadow, makePerson } from './assets3.js';
+import { GEO, mat, glowSprite, blobShadow } from './assets3.js';
+import { makeHumanoid, makeAnimalRig } from './rigs3.js';
 
 const TAU = Math.PI * 2;
+const SLOT_GUN = { 0: 'tool', 1: 'pistol', 2: 'rifle', 3: 'hmg', 4: 'rocket', 5: 'hammer', 6: 'rifle', 7: 'shotgun', 8: 'hmg' };
 
 class Pool {
   constructor(scene, makeFn) {
@@ -43,34 +45,9 @@ class Pool {
   }
 }
 
-const ANIMAL_DEF = {
-  boar: { col: 0x7e6244, rx: 1.28, ry: 0.8, rz: 0.95 },
-  wolf: { col: 0x75767f, rx: 1.3, ry: 0.78, rz: 0.8 },
-  bear: { col: 0x61482f, rx: 1.25, ry: 0.95, rz: 1.0 },
-  polarbear: { col: 0xdde5eb, rx: 1.25, ry: 0.95, rz: 1.0 },
-  alligator: { col: 0x557036, rx: 1.9, ry: 0.45, rz: 0.75 },
-  snake: { col: 0xb29a3a, rx: 2.1, ry: 0.3, rz: 0.35 },
-  scorpion: { col: 0x7e5226, rx: 1.2, ry: 0.4, rz: 0.95 },
-};
-
 export function makeActors3(S, scene) {
-  const persons = new Pool(scene, (colHex, gunLen) => makePerson(colHex, { gunLen }));
-  const animals = new Pool(scene, (type, r) => {
-    const def = ANIMAL_DEF[type] || ANIMAL_DEF.boar;
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(GEO.sphere, mat(def.col));
-    body.scale.set(r * def.rx, r * def.ry, r * def.rz);
-    body.position.y = r * def.ry * 0.9;
-    g.add(body);
-    const head = new THREE.Mesh(GEO.sphere, mat(def.col));
-    head.scale.set(r * 0.5, r * 0.45, r * 0.45);
-    head.position.set(r * def.rx * 0.95, r * def.ry * 0.95, 0);
-    g.add(head);
-    const sh = blobShadow(r * 3);
-    sh.position.y = 1;
-    g.add(sh);
-    return g;
-  });
+  const persons = new Pool(scene, (colHex, gun) => makeHumanoid(colHex, { gun }));
+  const animals = new Pool(scene, (type, r) => makeAnimalRig(type, r));
   const copters = new Pool(scene, (colHex) => {
     const g = new THREE.Group();
     const hull = new THREE.Mesh(GEO.sphere, mat(colHex));
@@ -150,9 +127,10 @@ export function makeActors3(S, scene) {
     g.position.set(x, 0, y);
     g.rotation.y = -angle;
     const u = g.userData;
-    if (u.body.material !== mat(colHex)) u.body.material = mat(colHex);
-    u.body.scale.y = opts.crouch ? 16 : 22;
-    if (opts.bob) g.position.y = Math.abs(Math.sin(S.t * 9 + (opts.phase || 0))) * 2.2;
+    u.setColor(colHex);
+    if (opts.gun) u.setGun(opts.gun);
+    u.setArmor(opts.bodyArmor || 0, opts.facemask || 0);
+    u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering);
   }
 
   return {
@@ -172,15 +150,23 @@ export function makeActors3(S, scene) {
         if (u.flying) continue;
         if (!rig.inView(u.x, u.y, 200)) continue;
         const colHex = parseInt((u.ally ? '#7ec850' : u.col).slice(1), 16);
-        const g = persons.get(u, colHex, u.gun === 'rifle' ? 22 : u.gun === 'shotgun' ? 17 : 14);
-        const moving = Math.hypot(u.vx, u.vy) > 20;
-        syncPerson(g, u.x, u.y, u.angle, colHex, { bob: moving, phase: u.id });
+        const g = persons.get(u, colHex, u.gun);
+        const moveAmt = Math.min(1, Math.hypot(u.vx, u.vy) / 120);
+        syncPerson(g, u.x, u.y, u.angle, colHex, {
+          gun: u.gathering ? 'tool' : u.gun, moveAmt, gathering: u.gathering,
+          bodyArmor: u.bodyArmor, facemask: u.facemask,
+        });
       }
       // ---- player ----
       const p = S.player;
       if (!p.inCopter) {
-        const g = persons.get(p, 0x7a8a50, 20);
-        syncPerson(g, p.x, p.y, p.angle, p.hurt > 0 ? 0xc47a5e : 0x7a8a50, { bob: p.moving });
+        const g = persons.get(p, 0x7a8a50, 'pistol');
+        const moveAmt = p.moving ? 1 : 0;
+        syncPerson(g, p.x, p.y, p.angle, p.hurt > 0 ? 0xc47a5e : 0x7a8a50, {
+          gun: SLOT_GUN[S.slot] || 'pistol', moveAmt,
+          gathering: p.swing > 0 && S.slot === 0,
+          bodyArmor: p.bodyArmor, facemask: p.facemask,
+        });
         if (p.dead) g.visible = false;
       }
       if (S.copter && !S.copter.destroyed) {
@@ -194,16 +180,19 @@ export function makeActors3(S, scene) {
       // ---- guards ----
       for (const gd of S.guards) {
         if (gd.dead || !rig.inView(gd.x, gd.y, 150)) continue;
-        const g = persons.get(gd, 0xbd5e2c, 18);
-        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { bob: true, phase: gd.seed });
+        const g = persons.get(gd, 0xbd5e2c, 'rifle');
+        const moveAmt = Math.min(1, Math.hypot(gd.vx || 0, gd.vy || 0) / 90 + 0.2);
+        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { gun: 'rifle', moveAmt, facemask: 1 });
       }
       // ---- animals ----
       for (const a of S.animals) {
         if (a.dead || !rig.inView(a.x, a.y, 150)) continue;
         const g = animals.get(a, a.type, a.r);
         g.position.set(a.x, 0, a.y);
-        const ang = (a.vx || a.vy) ? Math.atan2(a.vy, a.vx) : a.dir;
+        const sp = Math.hypot(a.vx || 0, a.vy || 0);
+        const ang = sp > 2 ? Math.atan2(a.vy, a.vx) : a.dir;
         g.rotation.y = -ang;
+        g.userData.animate(S.t, Math.min(1, sp / 80));
       }
       // ---- transports / trains / convoy / patrol / plane ----
       for (const tr of S.transports) {
@@ -265,8 +254,8 @@ export function makeActors3(S, scene) {
         g.userData.turret.rotation.y = -(cv.taim - cv.ang);
         for (const gd of cv.guards) {
           if (gd.dead) continue;
-          const pg = persons.get(gd, 0x6f7a4e, 17);
-          syncPerson(pg, gd.x, gd.y, gd.angle, 0x6f7a4e, { bob: true });
+          const pg = persons.get(gd, 0x6f7a4e, 'rifle');
+          syncPerson(pg, gd.x, gd.y, gd.angle, 0x6f7a4e, { gun: 'rifle', moveAmt: 0.6, facemask: 2 });
         }
       }
       if (S.patrol) {

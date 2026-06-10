@@ -22,23 +22,85 @@ export function makeTerrain3(S, scene) {
   tex.anisotropy = 4;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
 
+  // map texture has a TRANSPARENT ocean so the animated water shows through
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD.w, WORLD.h),
-    new THREE.MeshLambertMaterial({ map: tex }),
+    new THREE.MeshLambertMaterial({ map: tex, transparent: true }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(WORLD.w / 2, 0, WORLD.h / 2);
+  ground.renderOrder = 1;
   scene.add(ground);
 
-  // endless ocean beyond the map
+  // animated ocean: base water + a scrolling shimmer layer
   const ocean = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD.w * 6, WORLD.h * 6),
-    new THREE.MeshLambertMaterial({ color: 0x0d2b35 }),
+    new THREE.MeshLambertMaterial({ color: 0x10303c }),
   );
   ocean.rotation.x = -Math.PI / 2;
-  ocean.position.set(WORLD.w / 2, -2, WORLD.h / 2);
+  ocean.position.set(WORLD.w / 2, -3, WORLD.h / 2);
   scene.add(ocean);
-  return { tex };
+
+  const noise = document.createElement('canvas');
+  noise.width = 128; noise.height = 128;
+  const nc = noise.getContext('2d');
+  for (let y = 0; y < 128; y += 4) {
+    for (let x = 0; x < 128; x += 4) {
+      const v = Math.random();
+      nc.fillStyle = `rgba(190,230,240,${v > 0.82 ? 0.5 : v > 0.6 ? 0.16 : 0})`;
+      nc.fillRect(x, y, 4, 4);
+    }
+  }
+  const noiseTex = new THREE.CanvasTexture(noise);
+  noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping;
+  noiseTex.repeat.set(70, 46);
+  const shimmer = new THREE.Mesh(
+    new THREE.PlaneGeometry(WORLD.w * 6, WORLD.h * 6),
+    new THREE.MeshBasicMaterial({ map: noiseTex, transparent: true, opacity: 0.10, depthWrite: false }),
+  );
+  shimmer.rotation.x = -Math.PI / 2;
+  shimmer.position.set(WORLD.w / 2, -1.5, WORLD.h / 2);
+  scene.add(shimmer);
+  const shimmer2 = shimmer.clone();
+  shimmer2.material = new THREE.MeshBasicMaterial({ map: noiseTex.clone(), transparent: true, opacity: 0.07, depthWrite: false });
+  shimmer2.material.map.wrapS = shimmer2.material.map.wrapT = THREE.RepeatWrapping;
+  shimmer2.material.map.repeat.set(41, 27);
+  shimmer2.position.y = -1.2;
+  scene.add(shimmer2);
+
+  // sky dome + sun disc
+  const skyCv = document.createElement('canvas');
+  skyCv.width = 4; skyCv.height = 256;
+  const sc = skyCv.getContext('2d');
+  const sg = sc.createLinearGradient(0, 0, 0, 256);
+  sg.addColorStop(0, '#5d9bd3');
+  sg.addColorStop(0.62, '#9cc3dd');
+  sg.addColorStop(0.78, '#cfddd8');
+  sg.addColorStop(1, '#dfe5da');
+  sc.fillStyle = sg;
+  sc.fillRect(0, 0, 4, 256);
+  const skyTex = new THREE.CanvasTexture(skyCv);
+  skyTex.colorSpace = THREE.SRGBColorSpace;
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(34000, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }),
+  );
+  sky.position.set(WORLD.w / 2, -40, WORLD.h / 2);
+  scene.add(sky);
+  scene.background = null;
+
+  return {
+    tex,
+    sync(dt, S2, rig) {
+      const m1 = shimmer.material.map, m2 = shimmer2.material.map;
+      m1.offset.x += dt * 0.0022; m1.offset.y += dt * 0.0013;
+      m2.offset.x -= dt * 0.0011; m2.offset.y += dt * 0.0008;
+      // sky follows the camera target so the dome never shows an edge
+      sky.position.set(rig.cx, -40, rig.cy);
+      const light = rig.lightLevel();
+      sky.material.color.setHSL(0.58, 0.18, 0.62 + light * 0.38);
+    },
+  };
 }
 
 function biomeCols(S, x, y) {
@@ -59,11 +121,10 @@ function traceIsland(S, c) {
   c.closePath();
 }
 
-// paints the entire map in WORLD coordinates onto ctx (caller pre-scales)
+// paints the entire map in WORLD coordinates onto ctx (caller pre-scales).
+// The ocean stays TRANSPARENT — animated water planes render beneath.
 export function paintMap(S, c) {
   const W = WORLD.w, H = WORLD.h;
-  c.fillStyle = '#0d2b35';
-  c.fillRect(0, 0, W, H);
 
   // shallow halo
   c.lineJoin = 'round';
