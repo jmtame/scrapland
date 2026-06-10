@@ -114,7 +114,7 @@ export function makeBuildings3(S, scene) {
   });
 
   // ---------- monuments / shop / quarry / crossings ----------
-  const animated = { quarryArm: null, gates: [] };
+  const animated = { quarryArm: null, gates: [], fadeables: [] };
   for (const m2 of S.world.monuments) buildMonument(S, scene, m2, animated);
   buildShop(S, scene);
   for (const cr of S.world.crossings) {
@@ -322,6 +322,15 @@ export function makeBuildings3(S, scene) {
       for (const ga of animated.gates) {
         ga.pivot.rotation.z = (1 - ga.cr.gate) * 1.35;
       }
+      // monument buildings go translucent while the player is inside the
+      // monument zone, so interior loot is visible
+      const p = S.player;
+      for (const f of animated.fadeables) {
+        const dx = p.x - f.x, dy = p.y - f.y;
+        const near = !p.dead && (dx * dx + dy * dy) < (f.r + 90) * (f.r + 90);
+        const target = near ? 0.3 : 1;
+        for (const m2 of f.mats) m2.opacity += (target - m2.opacity) * Math.min(1, dt * 7);
+      }
     },
   };
 }
@@ -337,11 +346,22 @@ function buildMonument(S, scene, m, animated) {
     g.add(mm);
     return mm;
   };
+  // occluder version: clones the material so it can fade to translucent
+  // when the player is at the monument (loot inside stays visible)
+  const fadeMats = [];
+  const addFade = (...args) => {
+    const mm = add(...args);
+    const cloned = mm.material.clone();
+    cloned.transparent = true;
+    mm.material = cloned;
+    fadeMats.push(cloned);
+    return mm;
+  };
   if (m.type === 'gas') {
-    add(GEO.box, 0xa8432e, 216, 8, 30, 0, 64, -70);          // canopy
+    addFade(GEO.box, 0xa8432e, 216, 8, 30, 0, 64, -70);       // canopy
     for (const px of [-96, -30, 36, 96]) add(GEO.box, 0x3f4750, 6, 60, 6, px, 30, -62);
     for (const dx of [-58, 0]) add(GEO.box, 0x5b636b, 18, 30, 16, dx, 15, -22);
-    add(GEO.box, 0x8a9199, 54, 52, 50, 58, 26, -16);          // building
+    addFade(GEO.box, 0x8a9199, 54, 52, 50, 58, 26, -16);      // building
     add(GEO.box, 0xbfe0ef, 18, 14, 2, 66, 34, 10);            // window
     add(GEO.box, 0xcaa14a, 26, 26, 6, -104, 40, -62);         // price sign
   } else if (m.type === 'junk') {
@@ -354,11 +374,11 @@ function buildMonument(S, scene, m, animated) {
     add(GEO.cyl, 0x23211d, 12, 16, 12, 70, 8, -50);           // tire stack
     add(GEO.cyl, 0x23211d, 12, 16, 12, -66, 8, 58);
   } else if (m.type === 'warehouse') {
-    add(GEO.box, 0x7e848e, 252, 70, 164, 0, 35, 0);
-    add(GEO.box, 0x5b626b, 264, 10, 176, 0, 74, 0);           // roof lip
-    for (const dx of [-72, 0, 72]) add(GEO.box, 0x2a2f35, 60, 46, 4, dx, 23, 84);
-    add(GEO.box, 0x4a5158, 30, 14, 16, -38, 84, 0);           // vents
-    add(GEO.box, 0x4a5158, 30, 14, 16, 38, 84, 0);
+    addFade(GEO.box, 0x7e848e, 252, 70, 164, 0, 35, 0);
+    addFade(GEO.box, 0x5b626b, 264, 10, 176, 0, 74, 0);       // roof lip
+    for (const dx of [-72, 0, 72]) addFade(GEO.box, 0x2a2f35, 60, 46, 4, dx, 23, 84);
+    addFade(GEO.box, 0x4a5158, 30, 14, 16, -38, 84, 0);       // vents
+    addFade(GEO.box, 0x4a5158, 30, 14, 16, 38, 84, 0);
   } else if (m.type === 'quarry') {
     add(GEO.cyl, 0x3a3426, 46, 8, 28, -36, 4, 26);            // pit mound
     add(GEO.box, 0x3c4147, 12, 64, 12, 8, 32, -46);           // derrick
@@ -376,6 +396,7 @@ function buildMonument(S, scene, m, animated) {
     add(GEO.box, 0x4d3a20, 4, 46, 4, -44, 23, -58);           // flag pole
     add(GEO.box, 0x6e6a5a, 24, 13, 2, -32, 40, -58);
   }
+  if (fadeMats.length) animated.fadeables.push({ x: m.x, y: m.y, r: m.r, mats: fadeMats });
   scene.add(g);
 }
 
