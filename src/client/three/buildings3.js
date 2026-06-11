@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { TILE, SAFE_R, TTIER } from '../../sim/config.js';
 import { wallSegOf } from '../../sim/physics.js';
-import { GEO, mat, basic, glowSprite, blobShadow, TIER_COLS, TIER_DARK } from './assets3.js';
+import { GEO, mat, basic, glowSprite, blobShadow, TIER_COLS, TIER_DARK, tierWallMat, tierFloorMat } from './assets3.js';
 
 const TAU = Math.PI * 2;
 
@@ -189,7 +189,7 @@ export function makeBuildings3(S, scene) {
       if (e && e.sig !== sig) { bGroup.remove(e.mesh); floorMeshes.delete(k); e = null; }
       if (!e) {
         const [gx, gy] = k.split(',').map(Number);
-        const m2 = new THREE.Mesh(GEO.box, mat(TIER_DARK[s.mat] || TIER_DARK.wood));
+        const m2 = new THREE.Mesh(GEO.box, tierFloorMat(s.mat || 'wood'));
         m2.scale.set(TILE - 2, 5, TILE - 2);
         m2.position.set(gx * TILE + TILE / 2, 2.5, gy * TILE + TILE / 2);
         bGroup.add(m2);
@@ -210,7 +210,6 @@ export function makeBuildings3(S, scene) {
         const mx = (seg[0] + seg[2]) / 2, my = (seg[1] + seg[3]) / 2;
         const vert = seg[0] === seg[2];
         const g = new THREE.Group();
-        const col = w.type === 'door' ? (w.mat === 'wood' ? 0x7a5430 : TIER_COLS[w.mat]) : TIER_COLS[w.mat] || TIER_COLS.wood;
         if (w.type === 'door' && w.open) {
           for (const off of [-26, 26]) {
             const stub = new THREE.Mesh(GEO.box, mat(TIER_DARK[w.mat] || TIER_DARK.wood));
@@ -219,10 +218,16 @@ export function makeBuildings3(S, scene) {
             g.add(stub);
           }
         } else {
-          const box = new THREE.Mesh(GEO.box, mat(col));
+          const wallM = tierWallMat(w.mat || 'wood');
+          const box = new THREE.Mesh(GEO.box, wallM);
           const h = w.type === 'door' ? 42 : 48;
           box.scale.set(vert ? 11 : TILE, h, vert ? TILE : 11);
           box.position.y = h / 2;
+          if (w.type === 'door') {
+            // doors: darker tinted clone of the tier texture
+            box.material = wallM.clone();
+            box.material.color.setScalar(0.78);
+          }
           g.add(box);
           const cap = new THREE.Mesh(GEO.box, mat(TIER_DARK[w.mat] || TIER_DARK.wood));
           cap.scale.set(vert ? 13 : TILE + 2, 4, vert ? TILE + 2 : 13);
