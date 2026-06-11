@@ -263,40 +263,81 @@ export function makeAnimalRig(type, r) {
       g.add(spike);
     }
     u.legs = quadLegs(g, colDk, r, r * 0.55, r * 0.5, h * 0.8);
-  } else {
-    // boar / wolf / bears
-    const bulk = type === 'bear' || type === 'polarbear' ? 1.18 : 1;
-    const h = r * 0.78 * bulk;
-    g.add(ball(colDk, r * 1.05 * bulk, 0, h, 0, 0.78, 0.78));
-    g.add(ball(col, r * 0.92 * bulk, 0, h + r * 0.12, 0, 0.72, 0.7));
-    if (bulk > 1) g.add(ball(col, r * 0.7, -r * 0.25, h + r * 0.55, 0)); // shoulder hump
-    const headR = r * (type === 'wolf' ? 0.46 : 0.55);
+  } else if (type === 'bear' || type === 'polarbear') {
+    // bears: tall forequarters, shoulder hump, long muzzle — bulk UP, not wide
+    const h = r * 0.95;
+    g.add(ball(col, r * 0.88, r * 0.2, h, 0, 0.95, 0.78));        // chest (high)
+    g.add(ball(colDk, r * 0.74, -r * 0.62, h * 0.88, 0, 0.85, 0.74)); // rump (lower)
+    g.add(ball(col, r * 0.46, r * 0.05, h + r * 0.62, 0));        // hump
+    g.add(ball(colDk, r * 0.16, -r * 1.28, h * 0.95, 0));         // tail nub
     const head = new THREE.Group();
-    head.position.set(r * 0.95 * bulk, h + r * 0.18, 0);
-    head.add(ball(col, headR, 0, 0, 0));
-    if (type === 'wolf') {
-      head.add(ball(colDk, headR * 0.55, headR * 0.8, -headR * 0.15, 0, 0.7, 0.6)); // snout
-      for (const sz of [-1, 1]) {
-        const ear = new THREE.Mesh(GEO.cone, mat(colDk));
-        ear.scale.set(headR * 0.3, headR * 0.6, headR * 0.3);
-        ear.position.set(-headR * 0.3, headR * 0.85, sz * headR * 0.5);
-        head.add(ear);
-      }
-    } else if (type === 'boar') {
-      head.add(ball(colDk, headR * 0.5, headR * 0.85, -headR * 0.2, 0, 0.7, 0.8)); // snout
-      for (const sz of [-1, 1]) {
-        const tusk = new THREE.Mesh(GEO.cone, mat(0xe8e0cf));
-        tusk.scale.set(headR * 0.12, headR * 0.4, headR * 0.12);
-        tusk.position.set(headR * 0.9, -headR * 0.25, sz * headR * 0.4);
-        tusk.rotation.z = 0.7;
-        head.add(tusk);
-      }
-    } else {
-      for (const sz of [-1, 1]) head.add(ball(colDk, headR * 0.28, -headR * 0.2, headR * 0.85, sz * headR * 0.6));
+    head.position.set(r * 1.0, h + r * 0.42, 0);
+    head.add(ball(col, r * 0.42, 0, 0, 0));
+    head.add(ball(colDk, r * 0.26, r * 0.4, -r * 0.06, 0, 0.75, 0.7)); // long muzzle
+    head.add(ball(0x1c1410, r * 0.08, r * 0.62, -r * 0.04, 0));   // nose
+    for (const sz of [-1, 1]) {
+      head.add(ball(colDk, r * 0.13, -r * 0.18, r * 0.36, sz * r * 0.26)); // round ears
+      head.add(ball(0x14100c, r * 0.05, r * 0.3, r * 0.12, sz * r * 0.2)); // eyes
     }
     g.add(head);
     u.head = head;
-    u.legs = quadLegs(g, colDk, r * bulk, r * 0.5 * bulk, r * 0.42 * bulk, h * 0.85);
+    u.legs = quadLegs(g, colDk, r * 1.25, r * 0.52, r * 0.4, h * 0.92);
+  } else if (type === 'wolf') {
+    // wolves: slim, leggy, bushy tail
+    const h = r * 0.95;
+    g.add(ball(col, r * 0.85, r * 0.15, h, 0, 0.62, 0.52));       // chest
+    g.add(ball(colDk, r * 0.66, -r * 0.6, h * 0.96, 0, 0.55, 0.48)); // hind
+    const tail = new THREE.Group();
+    tail.add(ball(colDk, r * 0.22, -r * 1.15, h + r * 0.1, 0, 1, 0.8));
+    tail.add(ball(colDk, r * 0.16, -r * 1.45, h + r * 0.3, 0));
+    g.add(tail);
+    const head = new THREE.Group();
+    head.position.set(r * 0.95, h + r * 0.3, 0);
+    head.add(ball(col, r * 0.34, 0, 0, 0));
+    head.add(ball(colDk, r * 0.18, r * 0.36, -r * 0.05, 0, 0.7, 0.6)); // snout
+    head.add(ball(0x1c1410, r * 0.06, r * 0.52, -r * 0.02, 0));
+    for (const sz of [-1, 1]) {
+      const ear = new THREE.Mesh(GEO.cone, mat(colDk));
+      ear.scale.set(r * 0.1, r * 0.26, r * 0.1);
+      ear.position.set(-r * 0.12, r * 0.4, sz * r * 0.18);
+      head.add(ear);
+      head.add(ball(0xd8c43a, r * 0.05, r * 0.26, r * 0.1, sz * r * 0.15)); // amber eyes
+    }
+    g.add(head);
+    u.head = head;
+    u.legs = quadLegs(g, colDk, r * 0.85, r * 0.5, r * 0.3, h * 1.0);
+  } else {
+    // boar: low heavy front, bristle ridge, snout + tusks
+    const h = r * 0.66;
+    g.add(ball(colDk, r * 1.0, 0, h, 0, 0.72, 0.72));
+    g.add(ball(col, r * 0.88, r * 0.1, h + r * 0.08, 0, 0.66, 0.64));
+    for (let i = 0; i < 4; i++) {
+      const bristle = new THREE.Mesh(GEO.cone, mat(0x3e3022));
+      bristle.scale.set(r * 0.1, r * 0.2, r * 0.1);
+      bristle.position.set(r * 0.45 - i * r * 0.3, h + r * 0.52 - i * r * 0.03, 0);
+      g.add(bristle);
+    }
+    g.add(ball(colDk, r * 0.1, -r * 1.05, h + r * 0.15, 0));      // tail nub
+    const head = new THREE.Group();
+    head.position.set(r * 0.92, h, 0);
+    head.add(ball(col, r * 0.46, 0, 0, 0, 0.9, 0.8));
+    head.add(ball(0x8a6a58, r * 0.2, r * 0.5, -r * 0.12, 0, 0.7, 0.9)); // snout disc
+    for (const sz of [-1, 1]) {
+      const tusk = new THREE.Mesh(GEO.cone, mat(0xe8e0cf));
+      tusk.scale.set(r * 0.06, r * 0.2, r * 0.06);
+      tusk.position.set(r * 0.42, -r * 0.16, sz * r * 0.22);
+      tusk.rotation.z = 0.6;
+      head.add(tusk);
+      const ear = new THREE.Mesh(GEO.cone, mat(colDk));
+      ear.scale.set(r * 0.1, r * 0.18, r * 0.1);
+      ear.position.set(-r * 0.2, r * 0.38, sz * r * 0.24);
+      ear.rotation.x = sz * 0.4;
+      head.add(ear);
+      head.add(ball(0x14100c, r * 0.05, r * 0.3, r * 0.14, sz * r * 0.22)); // eyes
+    }
+    g.add(head);
+    u.head = head;
+    u.legs = quadLegs(g, colDk, r * 0.95, r * 0.48, r * 0.36, h * 0.9);
   }
 
   g.userData = {
