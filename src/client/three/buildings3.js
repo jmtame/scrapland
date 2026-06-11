@@ -303,11 +303,11 @@ export function makeBuildings3(S, scene) {
           eye.scale.set(1.5, 1.5, 1.5);
           eye.position.set(9.2, 4.5, 0);
           pivot.add(eye);
-          // slung gun under the head (length by tier)
-          const len = d.tier === 3 ? 40 : d.tier === 2 ? 30 : 22;
+          // slung gun under the head (stubby; length varies slightly by tier)
+          const len = d.tier === 3 ? 22 : d.tier === 2 ? 17 : 13;
           const gun = new THREE.Mesh(GEO.box, mat(0x1e2226));
           gun.scale.set(len, 3.8, 3.4);
-          gun.position.set(len / 2 + 4, -2.6, 0);
+          gun.position.set(len / 2 + 5, -2.6, 0);
           pivot.add(gun);
           if (d.tier === 2) {
             const gun2 = gun.clone();
@@ -315,9 +315,9 @@ export function makeBuildings3(S, scene) {
             pivot.add(gun2);
           }
           const muzzle = new THREE.Mesh(GEO.cyl, mat(AC, { emissive: AC, emissiveIntensity: 0.45 }));
-          muzzle.scale.set(2.2, 3.5, 2.2);
+          muzzle.scale.set(2, 2.6, 2);
           muzzle.rotation.z = Math.PI / 2;
-          muzzle.position.set(len + 5, -2.6, 0);
+          muzzle.position.set(len + 6, -2.6, 0);
           pivot.add(muzzle);
           // tier band on the column
           const band = new THREE.Mesh(GEO.cyl, mat(AC, { emissive: AC, emissiveIntensity: 0.3 }));
