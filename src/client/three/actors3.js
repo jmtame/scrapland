@@ -325,6 +325,7 @@ export function makeActors3(S, scene) {
     return c;
   }
 
+  let curDt = 1 / 60;
   function syncPerson(g, x, y, angle, colHex, opts = {}) {
     g.position.set(x, 0, y);
     g.rotation.y = -angle;
@@ -339,10 +340,16 @@ export function makeActors3(S, scene) {
     }
     u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering, !!opts.jack, relMove);
     if (u.judder) { g.position.x += u.judder.x; g.position.z += u.judder.z; }
+    // wading: submerge to head height in unfrozen lakes
+    const lake = S.world.lakeAt(x, y);
+    const sink = lake && !lake.frozen ? 30 : 0;
+    u.sinkY = (u.sinkY ?? 0) + (sink - (u.sinkY ?? 0)) * Math.min(1, curDt * 5);
+    g.position.y -= u.sinkY;
   }
 
   return {
     sync(dt, rig) {
+      curDt = dt;
       // ---- units ----
       for (const u of S.units) {
         if (u.dead || u.eliminated) continue;
