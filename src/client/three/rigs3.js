@@ -84,16 +84,29 @@ export function makeHumanoid(colHex, opts = {}) {
   // head
   parts.head = new THREE.Group();
   parts.head.position.y = 38;
-  parts.head.add(ball(SKIN, 5.6, 0, 0, 0));
-  const hair = new THREE.Mesh(GEO.sphere, mat(opts.hairCol ?? 0x3a2a18));
-  hair.scale.set(5.9, 4.4, 5.9);
-  hair.position.y = 2.2;
-  parts.head.add(hair);
-  // team band
-  const band = new THREE.Mesh(GEO.cyl, mat(colHex));
-  band.scale.set(5.9, 1.6, 5.9);
-  band.position.y = 1.2;
-  parts.head.add(band);
+  let band = null;
+  if (opts.scientist) {
+    // Rust scientist: hazmat hood, gas mask, pale eye lenses, air tank
+    parts.head.add(ball(colHex, 6.3, 0, 0.4, 0));
+    parts.head.add(box(0x1e2226, 5.5, 4.5, 7.5, 4.2, -1.2, 0));     // mask snout
+    for (const sz of [-1, 1]) parts.head.add(ball(0xd8e6c0, 1.3, 5.2, 1.4, sz * 2.4)); // lenses
+    const tank = new THREE.Mesh(GEO.cyl, mat(0x596066));
+    tank.scale.set(3.6, 12, 3.6);
+    tank.position.set(-8, 25, 0);
+    g.add(tank);
+    parts.pack.visible = false;
+  } else {
+    parts.head.add(ball(SKIN, 5.6, 0, 0, 0));
+    const hair = new THREE.Mesh(GEO.sphere, mat(opts.hairCol ?? 0x3a2a18));
+    hair.scale.set(5.9, 4.4, 5.9);
+    hair.position.y = 2.2;
+    parts.head.add(hair);
+    // team band
+    band = new THREE.Mesh(GEO.cyl, mat(colHex));
+    band.scale.set(5.9, 1.6, 5.9);
+    band.position.y = 1.2;
+    parts.head.add(band);
+  }
   parts.band = band;
   // helmet (facemask levels)
   parts.helmet = new THREE.Group();
@@ -127,7 +140,7 @@ export function makeHumanoid(colHex, opts = {}) {
       g.userData.colHex = hex;
       parts.torso.material = mat(hex);
       parts.torsoShade.material = mat(shade(hex, 0.7));
-      band.material = mat(hex);
+      if (band) band.material = mat(hex);
     },
     animate(t, moveAmt, gathering, jack, relMove) {
       const u2 = g.userData;

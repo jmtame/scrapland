@@ -46,7 +46,7 @@ class Pool {
 }
 
 export function makeActors3(S, scene) {
-  const persons = new Pool(scene, (colHex, gun) => makeHumanoid(colHex, { gun }));
+  const persons = new Pool(scene, (colHex, gun, scientist) => makeHumanoid(colHex, { gun, scientist }));
   const animals = new Pool(scene, (type, r) => makeAnimalRig(type, r));
   function basicDark() { return mat(0x191c15); }
   const bx = (hex, sx, sy, sz, x, y, z) => {
@@ -400,9 +400,9 @@ export function makeActors3(S, scene) {
       // ---- guards ----
       for (const gd of S.guards) {
         if (gd.dead || !rig.inView(gd.x, gd.y, 150)) continue;
-        const g = persons.get(gd, 0xbd5e2c, 'rifle');
+        const g = persons.get(gd, 0xbd5e2c, 'rifle', true); // orange scientists
         const moveAmt = Math.min(1, Math.hypot(gd.vx || 0, gd.vy || 0) / 90 + 0.2);
-        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { gun: 'rifle', moveAmt, facemask: 1, vx: gd.vx, vy: gd.vy });
+        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { gun: 'rifle', moveAmt, vx: gd.vx, vy: gd.vy });
       }
       // ---- animals ----
       for (const a of S.animals) {
@@ -521,8 +521,8 @@ export function makeActors3(S, scene) {
         g.userData.turret.rotation.y = -(cv.taim - cv.ang);
         for (const gd of cv.guards) {
           if (gd.dead) continue;
-          const pg = persons.get(gd, 0x6f7a4e, 'rifle');
-          syncPerson(pg, gd.x, gd.y, gd.angle, 0x6f7a4e, { gun: 'rifle', moveAmt: 0.6, facemask: 2 });
+          const pg = persons.get(gd, 0x3a6ea5, 'rifle', true); // blue scientists
+          syncPerson(pg, gd.x, gd.y, gd.angle, 0x3a6ea5, { gun: 'rifle', moveAmt: 0.6 });
         }
       }
       if (S.patrol) {
