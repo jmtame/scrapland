@@ -375,6 +375,7 @@ function spawnOneAnimal(S, type, def, band, placed, leader) {
     } else { x = R.rand(band[0], band[1]); y = R.rand(90, WORLD.h - 90); }
     x = clamp(x, band[0] - 70, band[1] + 70); y = clamp(y, 90, WORLD.h - 90);
     if (dist(x, y, S.player.x, S.player.y) < 220) continue;
+    if (dist(x, y, S.world.shop.x, S.world.shop.y) < SAFE_R + 200) continue; // never near the safe zone
     if (S.world.landFactor(x, y) < 0.05) continue;
     if (S.world.lakeAt(x, y) && !def.lake) continue;
     let bad = false;

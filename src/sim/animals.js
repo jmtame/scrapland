@@ -117,6 +117,14 @@ export function updateAnimals(S, dt) {
           break;
         }
       }
+      // and steer clear of the safe-zone rim BEFORE touching it
+      {
+        const shop = S.world.shop;
+        if (dist2(a.x, a.y, shop.x, shop.y) < (620 + 140) * (620 + 140)) {
+          a.avoidA = Math.atan2(a.y - shop.y, a.x - shop.x) + S.rng.rand(-0.3, 0.3);
+          a.avoidT = 1.6; a.dir = a.avoidA;
+        }
+      }
       mx = Math.cos(a.dir); my = Math.sin(a.dir);
     }
 
@@ -179,6 +187,7 @@ export function respawnAnimal(S, a) {
       y = S.rng.rand(90, WORLD.h - 90);
     }
     if (dist(x, y, S.player.x, S.player.y) < 520) continue;
+    if (dist(x, y, S.world.shop.x, S.world.shop.y) < 620 + 200) continue; // clear of the safe zone
     if (S.world.landFactor(x, y) < 0.05) continue;
     if (S.world.lakeAt(x, y) && !a.lake) continue;
     if (blocked(S, x, y, a.r)) continue;
