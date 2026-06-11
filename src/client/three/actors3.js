@@ -296,6 +296,43 @@ export function makeActors3(S, scene) {
     return out;
   }
 
+  // wading splashes: expanding water rings + droplet sparkles
+  const SPLMAX = 18;
+  const splashes = [];
+  const splashRings = [];
+  for (let i = 0; i < SPLMAX; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.6, 1, 14),
+      new THREE.MeshBasicMaterial({ color: 0xbfe2ec, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 3;
+    ring.visible = false;
+    scene.add(ring);
+    splashRings.push(ring);
+  }
+  function spawnSplash(x, y) {
+    if (splashes.length >= SPLMAX) splashes.shift();
+    splashes.push({ x: x + (Math.random() - 0.5) * 6, y: y + (Math.random() - 0.5) * 6, life: 0.5, max: 0.5 });
+  }
+  function updateSplashes(dt) {
+    for (let i = splashes.length - 1; i >= 0; i--) {
+      const s = splashes[i];
+      s.life -= dt;
+      if (s.life <= 0) splashes.splice(i, 1);
+    }
+    splashRings.forEach((ring, i) => {
+      const s = splashes[i];
+      if (!s) { ring.visible = false; return; }
+      ring.visible = true;
+      const age = 1 - s.life / s.max;
+      const r = 5 + age * 17;
+      ring.scale.set(r, r, 1);
+      ring.position.set(s.x, 2.2, s.y);
+      ring.material.opacity = 0.55 * (s.life / s.max);
+    });
+  }
+
   // particles
   const PMAX = 1200;
   const pGeo = new THREE.BufferGeometry();
@@ -743,9 +780,13 @@ export function makeActors3(S, scene) {
         g.position.set(S.muzzle.x, 18, S.muzzle.y);
         g.material.opacity = S.muzzle.t / 0.08;
       }
-      // ---- harvest FX (from sim events) ----
-      for (const e of S.events) if (e.type === 'harvest' && rig.inView(e.x, e.y, 300)) spawnHarvestFx(e);
+      // ---- harvest + splash FX (from sim events) ----
+      for (const e of S.events) {
+        if (e.type === 'harvest' && rig.inView(e.x, e.y, 300)) spawnHarvestFx(e);
+        else if (e.type === 'splash' && rig.inView(e.x, e.y, 300)) spawnSplash(e.x, e.y);
+      }
       updateHarvestFx(dt);
+      updateSplashes(dt);
       updateSmoke(dt);
 
       // ---- footprints ----

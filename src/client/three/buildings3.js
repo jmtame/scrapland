@@ -146,6 +146,43 @@ export function makeBuildings3(S, scene) {
   // ---------- ambient ground scatter (client-only, deterministic) ----------
   buildScatter(S, scene);
 
+  // ---------- 3D railroad: instanced ties + thin steel rail strips ----------
+  {
+    const allTies = [];
+    const railStrips = new THREE.Group();
+    const steelM = mat(0x9aa1a8);
+    const GA = 11;
+    for (const rl of S.world.rails) {
+      for (let i = 0; i < rl.pts.length - 1; i++) {
+        const a = rl.pts[i], b = rl.pts[i + 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        const px = -Math.sin(ang), py = Math.cos(ang);
+        // ties (skip through crossings — boards cover them)
+        for (let d = 8; d < len; d += 24) {
+          const tx = a.x + Math.cos(ang) * d, ty = a.y + Math.sin(ang) * d;
+          if (S.world.crossings.some(cr => (tx - cr.x) ** 2 + (ty - cr.y) ** 2 < 52 * 52)) continue;
+          allTies.push({ x: tx, y: ty, a: ang });
+        }
+        // two steel strips per segment
+        for (const off of [-GA, GA]) {
+          const strip = new THREE.Mesh(GEO.box, steelM);
+          strip.scale.set(len + 2, 2.2, 2.4);
+          strip.position.set((a.x + b.x) / 2 + px * off, 1.6, (a.y + b.y) / 2 + py * off);
+          strip.rotation.y = -ang;
+          railStrips.add(strip);
+        }
+      }
+    }
+    const tieI = new THREE.InstancedMesh(GEO.box, mat(0x3f3322), allTies.length || 1);
+    allTies.forEach((t2, i) => {
+      M.makeRotationY(-t2.a).scale(new THREE.Vector3(5, 1.6, 2 * GA + 10)).setPosition(t2.x, 0.9, t2.y);
+      tieI.setMatrixAt(i, M);
+    });
+    tieI.frustumCulled = false;
+    scene.add(tieI, railStrips);
+  }
+
   // ---------- barrels & crates (visibility tracks hp) ----------
   const barrelMeshes = S.barrels.map((o) => {
     let m2;

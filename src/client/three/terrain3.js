@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { WORLD, TILE } from '../../sim/config.js';
 import { hash2, smooth01, clamp } from '../../sim/util.js';
 
-const SCALE = 0.45; // texture px per world px (≈6221×4147) — sharp at play zoom
+const SCALE = 0.5; // texture px per world px (6912×4608) — sharp at play zoom
 
 export function makeTerrain3(S, scene) {
   const W = Math.round(WORLD.w * SCALE), H = Math.round(WORLD.h * SCALE);
@@ -381,37 +381,8 @@ export function paintMap(S, c) {
     // ballast (drawn semi-transparent over crossing pads so they blend)
     path(); c.strokeStyle = 'rgba(87,77,64,0.85)'; c.lineWidth = 2 * GA + 16; c.stroke();
     path(); c.strokeStyle = 'rgba(107,95,78,0.85)'; c.lineWidth = 2 * GA + 7; c.stroke();
-    // ties
-    c.strokeStyle = '#3a2e1d';
-    c.lineWidth = 4.5;
-    for (let i = 0; i < rl.pts.length - 1; i++) {
-      const a = rl.pts[i], b = rl.pts[i + 1];
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      const px = -Math.sin(ang), py = Math.cos(ang);
-      for (let d = 8; d < len; d += 24) {
-        const tx = a.x + Math.cos(ang) * d, ty = a.y + Math.sin(ang) * d;
-        if (nearCrossing(tx, ty)) continue;
-        c.beginPath();
-        c.moveTo(tx - px * (GA + 5), ty - py * (GA + 5));
-        c.lineTo(tx + px * (GA + 5), ty + py * (GA + 5));
-        c.stroke();
-      }
-    }
-    // steel rails: continuous offset polylines (always on top, embedded look)
-    c.strokeStyle = '#a4abb2';
-    c.lineWidth = 2.8;
-    for (const off of [-GA, GA]) {
-      c.beginPath();
-      for (let i = 0; i < rl.pts.length; i++) {
-        const prev = rl.pts[Math.max(0, i - 1)], next = rl.pts[Math.min(rl.pts.length - 1, i + 1)];
-        const ang = Math.atan2(next.y - prev.y, next.x - prev.x);
-        const px = -Math.sin(ang), py = Math.cos(ang);
-        const x = rl.pts[i].x + px * off, y = rl.pts[i].y + py * off;
-        i ? c.lineTo(x, y) : c.moveTo(x, y);
-      }
-      c.stroke();
-    }
+    // (ties + steel rails are real 3D geometry now — crisp at any zoom;
+    // only the ballast bed stays in the texture)
   }
   // light decor dots (texture-level variety; real flora is 3D)
   for (let y = 0; y < H; y += 96) {
