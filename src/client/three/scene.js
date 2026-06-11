@@ -34,6 +34,8 @@ export function makeScene(S, view) {
     cx: S.player.x, cy: S.player.y,      // look-at point in sim coords
     dist: 1150, elev: 0.96,              // elevation angle (rad) ~55°
     shakeX: 0, shakeY: 0,
+    orbit: 0,                            // user view rotation (middle-drag)
+    zoomFactor: 1,                       // user wheel zoom (clamped)
     _ray: new THREE.Raycaster(),
     _plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
     _v3: new THREE.Vector3(),
@@ -50,7 +52,7 @@ export function makeScene(S, view) {
 
     update(dt) {
       const p = S.player;
-      let tx = p.x, ty = p.y, tdist = 1500, telev = 0.96;
+      let tx = p.x, ty = p.y, tdist = 1500 * rig.zoomFactor, telev = 0.96;
       if (view.godView) {
         // near-top-down, distance computed to FIT the whole map at any aspect
         tx = WORLD.w / 2; ty = WORLD.h / 2;
@@ -61,7 +63,7 @@ export function makeScene(S, view) {
         tdist = Math.max(fitH, fitW) * 1.02;
       } else if (p.inCopter && S.copter) {
         const spd = Math.hypot(S.copter.vx, S.copter.vy);
-        tdist = 1850 + spd * 0.9;
+        tdist = (1850 + spd * 0.9) * rig.zoomFactor;
       }
       // snap (no cross-map lerp) when toggling map view — the camera must be
       // ON the player the instant you exit the map
@@ -83,7 +85,8 @@ export function makeScene(S, view) {
       const cx = rig.cx + rig.shakeX, cy = rig.cy + rig.shakeY;
       const h = Math.sin(rig.elev) * rig.dist;
       const back = Math.cos(rig.elev) * rig.dist;
-      camera.position.set(cx, h, cy + back);
+      const az = view.godView ? 0 : rig.orbit;
+      camera.position.set(cx + Math.sin(az) * back, h, cy + Math.cos(az) * back);
       camera.lookAt(cx, 0, cy);
       sunTarget.position.set(cx, 0, cy);
 

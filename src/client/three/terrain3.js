@@ -29,7 +29,9 @@ export function makeTerrain3(S, scene) {
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(WORLD.w / 2, 0, WORLD.h / 2);
-  ground.renderOrder = 1;
+  // draw FIRST among transparents so decals (footprints, scorch, shadows)
+  // layer on top of the land; water shimmer sits beneath at -2
+  ground.renderOrder = -1;
   scene.add(ground);
 
   // animated ocean: base water + a scrolling shimmer layer
@@ -60,6 +62,7 @@ export function makeTerrain3(S, scene) {
   );
   shimmer.rotation.x = -Math.PI / 2;
   shimmer.position.set(WORLD.w / 2, -1.5, WORLD.h / 2);
+  shimmer.renderOrder = -2;
   scene.add(shimmer);
   const noiseTex2 = noiseTex.clone();
   noiseTex2.wrapS = noiseTex2.wrapT = THREE.RepeatWrapping;
@@ -70,6 +73,7 @@ export function makeTerrain3(S, scene) {
   );
   shimmer2.rotation.x = -Math.PI / 2;
   shimmer2.position.set(WORLD.w / 2, -1.2, WORLD.h / 2);
+  shimmer2.renderOrder = -2;
   scene.add(shimmer2);
 
   // sky dome + sun disc

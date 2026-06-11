@@ -102,6 +102,7 @@ export function makeActors3(S, scene) {
     FPMAX,
   );
   fpI.frustumCulled = false;
+  fpI.renderOrder = 2; // above the (transparent) ground quad
   scene.add(fpI);
   const fpM = new THREE.Matrix4();
   const fpR = new THREE.Matrix4();

@@ -260,26 +260,70 @@ export function makeBuildings3(S, scene) {
         g.position.set(cx, 0, cy);
         let entry = { group: g, sig };
         if (d.type === 'turret') {
-          const base = new THREE.Mesh(GEO.cyl6, mat(0x3b4138));
-          base.scale.set(17, 10, 17);
-          base.position.y = 5;
-          g.add(base);
-          const head = new THREE.Mesh(GEO.cyl, mat(0x565d4c));
-          head.scale.set(11, 10, 11);
-          head.position.y = 16;
-          g.add(head);
+          // Rust-style auto turret: splayed tripod legs, center column,
+          // twin yoke plates, boxy sensor head with lens + slung gun
           const AC = d.tier === 3 ? 0x5fc8e0 : d.tier === 2 ? 0xe0a23a : 0x9aa1a8;
+          for (let li = 0; li < 3; li++) {
+            const a = (li / 3) * TAU + 0.5;
+            const leg = new THREE.Mesh(GEO.cyl, mat(0x2e3330));
+            leg.scale.set(2.2, 18, 2.2);
+            leg.position.set(Math.cos(a) * 11, 8, Math.sin(a) * 11);
+            leg.rotation.z = -Math.cos(a) * 0.5;
+            leg.rotation.x = Math.sin(a) * 0.5;
+            g.add(leg);
+            const foot = new THREE.Mesh(GEO.box, mat(0x23272b));
+            foot.scale.set(6, 2, 6);
+            foot.position.set(Math.cos(a) * 16, 1, Math.sin(a) * 16);
+            g.add(foot);
+          }
+          const column = new THREE.Mesh(GEO.cyl, mat(0x3a3f44));
+          column.scale.set(3.6, 16, 3.6);
+          column.position.y = 16;
+          g.add(column);
           const pivot = new THREE.Group();
-          pivot.position.y = 18;
-          const barrel = new THREE.Mesh(GEO.box, mat(0x22262a));
-          const len = d.tier === 3 ? 42 : d.tier === 2 ? 32 : 24;
-          barrel.scale.set(len, 5, d.tier === 2 ? 9 : 5);
-          barrel.position.x = len / 2 + 6;
-          pivot.add(barrel);
-          const tip = new THREE.Mesh(GEO.box, mat(AC, { emissive: AC, emissiveIntensity: 0.5 }));
-          tip.scale.set(4, 6, 6);
-          tip.position.x = len + 8;
-          pivot.add(tip);
+          pivot.position.y = 26;
+          // yoke plates
+          for (const sz of [-1, 1]) {
+            const plate = new THREE.Mesh(GEO.box, mat(0x4a5054));
+            plate.scale.set(12, 13, 2.4);
+            plate.position.set(0, 2, sz * 7.6);
+            pivot.add(plate);
+          }
+          // sensor head
+          const head = new THREE.Mesh(GEO.box, mat(0x565d5a));
+          head.scale.set(13, 9.5, 12);
+          head.position.y = 3;
+          pivot.add(head);
+          const lens = new THREE.Mesh(GEO.cyl, mat(0x14181c));
+          lens.scale.set(3.2, 2, 3.2);
+          lens.rotation.z = Math.PI / 2;
+          lens.position.set(7.6, 4.5, 0);
+          pivot.add(lens);
+          const eye = new THREE.Mesh(GEO.sphere, mat(0xd23c28, { emissive: 0xd23c28, emissiveIntensity: 0.8 }));
+          eye.scale.set(1.5, 1.5, 1.5);
+          eye.position.set(9.2, 4.5, 0);
+          pivot.add(eye);
+          // slung gun under the head (length by tier)
+          const len = d.tier === 3 ? 40 : d.tier === 2 ? 30 : 22;
+          const gun = new THREE.Mesh(GEO.box, mat(0x1e2226));
+          gun.scale.set(len, 3.8, 3.4);
+          gun.position.set(len / 2 + 4, -2.6, 0);
+          pivot.add(gun);
+          if (d.tier === 2) {
+            const gun2 = gun.clone();
+            gun2.position.z = 4.4;
+            pivot.add(gun2);
+          }
+          const muzzle = new THREE.Mesh(GEO.cyl, mat(AC, { emissive: AC, emissiveIntensity: 0.45 }));
+          muzzle.scale.set(2.2, 3.5, 2.2);
+          muzzle.rotation.z = Math.PI / 2;
+          muzzle.position.set(len + 5, -2.6, 0);
+          pivot.add(muzzle);
+          // tier band on the column
+          const band = new THREE.Mesh(GEO.cyl, mat(AC, { emissive: AC, emissiveIntensity: 0.3 }));
+          band.scale.set(4.1, 2, 4.1);
+          band.position.y = 21;
+          g.add(band);
           g.add(pivot);
           entry.pivot = pivot;
         } else if (d.type === 'cupboard') {
