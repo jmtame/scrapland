@@ -54,6 +54,33 @@ export function glowTexture() {
   glowTex = new THREE.CanvasTexture(cv);
   return glowTex;
 }
+// soft plateau puff (no hot center) — for smoke and mist
+let puffTex = null;
+export function puffTexture() {
+  if (puffTex) return puffTex;
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(64, 64, 6, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,0.5)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.42)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 128, 128);
+  // break the perfect circle with a few soft bites
+  c.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.26, r = 58;
+    const bg = c.createRadialGradient(64 + Math.cos(a) * r, 64 + Math.sin(a) * r, 2, 64 + Math.cos(a) * r, 64 + Math.sin(a) * r, 26);
+    bg.addColorStop(0, 'rgba(0,0,0,0.5)');
+    bg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, 128, 128);
+  }
+  puffTex = new THREE.CanvasTexture(cv);
+  return puffTex;
+}
+
 let blobTex = null;
 export function blobTexture() {
   if (blobTex) return blobTex;

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { WORLD } from '../../sim/config.js';
 import { smooth01, clamp } from '../../sim/util.js';
-import { glowTexture, blobTexture } from './assets3.js';
+import { glowTexture, blobTexture, puffTexture } from './assets3.js';
 
 export function makeWeather3(S, scene) {
   // precipitation
@@ -58,23 +58,31 @@ export function makeWeather3(S, scene) {
     }
   };
 
-  // fog banks: FLAT mist planes hugging the ground (billboard sprites get
-  // depth-clipped by the terrain at a tilted camera — sharp cutoff artifact)
+  // fog banks: LAYERED soft puff planes at staggered heights that slowly
+  // rotate and breathe — reads as a volume of mist, not a spotlight disc
   const fogSprites = [];
+  const fogGeo = new THREE.CircleGeometry(1, 16);
   const ensureFog = () => {
     if (fogSprites.length || !S.fogBanks) return;
     for (const f of S.fogBanks) {
-      const m = new THREE.MeshBasicMaterial({
-        map: glowTexture(), color: 0xd6dee6, transparent: true, opacity: 0,
-        depthWrite: false,
+      const group = new THREE.Group();
+      const puffs = [];
+      f.puffs.forEach((p, i) => {
+        const m = new THREE.MeshBasicMaterial({
+          map: puffTexture(), color: 0xc8d0d8, transparent: true, opacity: 0,
+          depthWrite: false,
+        });
+        const s = new THREE.Mesh(fogGeo, m);
+        s.rotation.x = -Math.PI / 2;
+        const r = p.r * (0.85 + (i % 3) * 0.18);
+        s.scale.set(r, r * 0.8, 1);
+        s.position.set(p.dx * 0.6, 2 + i * 4.5, p.dy * 0.6);
+        s.renderOrder = 3 + i;
+        group.add(s);
+        puffs.push({ s, r, phase: i * 1.7 + f.dens * 5, spin: (i % 2 ? 1 : -1) * (0.015 + i * 0.004) });
       });
-      const s = new THREE.Mesh(new THREE.CircleGeometry(1, 16), m);
-      s.rotation.x = -Math.PI / 2;
-      s.scale.set(f.r * 1.7, f.r * 1.15, 1);
-      s.position.y = 2.2;
-      s.renderOrder = 3;
-      scene.add(s);
-      fogSprites.push({ f, s });
+      scene.add(group);
+      fogSprites.push({ f, group, puffs });
     }
   };
 
@@ -127,10 +135,16 @@ export function makeWeather3(S, scene) {
         matC.color.setScalar(0.82 + cLight * 0.18);
         sh.material.opacity = (0.32 + 0.26 * cLight) * cl.op; // crisper at noon
       }
-      for (const { f, s } of fogSprites) {
+      for (const { f, group, puffs } of fogSprites) {
         const winter = S.world.biomeAt(f.x, f.y) === 'winter';
-        s.material.opacity = winter ? 0 : Math.min(0.5, W.fog * f.dens * 0.5);
-        s.position.set(f.x, 2.2, f.y);
+        group.position.set(f.x, 0, f.y);
+        const base = winter ? 0 : Math.min(0.16, W.fog * f.dens * 0.15);
+        for (const pf of puffs) {
+          pf.s.material.opacity = base;
+          pf.s.rotation.z = pf.phase + S.t * pf.spin;
+          const pulse = 1 + Math.sin(S.t * 0.27 + pf.phase) * 0.07;
+          pf.s.scale.set(pf.r * pulse, pf.r * 0.8 * pulse, 1);
+        }
       }
       let n = 0;
       if (S.fireflies) {

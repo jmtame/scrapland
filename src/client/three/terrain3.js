@@ -237,21 +237,79 @@ export function paintMap(S, c) {
     }
     if (run && run.pts.length > 1) roadRuns.push(run);
   }
-  const strokeRun = (run, col, w) => {
-    c.strokeStyle = col;
-    c.lineWidth = w;
+  // organic Rust-style roads: stamp jittered discs along densified paths so
+  // edges are ragged and width breathes — no clean ribbon borders
+  const densify = (pts, step) => {
+    const out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const n = Math.max(1, Math.ceil(len / step));
+      for (let k = 0; k < n; k++) out.push({ x: a.x + (b.x - a.x) * (k / n), y: a.y + (b.y - a.y) * (k / n) });
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  };
+  const stampRun = (run, col, baseR, jitterAmp, alpha) => {
+    c.fillStyle = col;
+    c.globalAlpha = alpha;
+    const dense = densify(run.pts, baseR * 0.55);
+    for (let i = 0; i < dense.length; i++) {
+      const p = dense[i];
+      const h1 = hash2((p.x * 0.13) | 0, (p.y * 0.13) | 0);
+      const h2 = hash2((p.x * 0.31) | 0, (p.y * 0.07) | 0);
+      const r = baseR * (0.86 + h1 * 0.34);
+      const ox = (h2 - 0.5) * jitterAmp, oy = (h1 - 0.5) * jitterAmp;
+      c.beginPath();
+      c.arc(p.x + ox, p.y + oy, r, 0, 7);
+      c.fill();
+    }
+    c.globalAlpha = 1;
+  };
+  for (const run of roadRuns) stampRun(run, '#564a31', run.rd.w * 0.62, 9, 0.85);   // shoulder, ragged
+  for (const run of roadRuns) stampRun(run, '#6c5d3b', run.rd.w * 0.46, 6, 1);      // packed dirt
+  for (const run of roadRuns) stampRun(run, '#75653f', run.rd.w * 0.3, 8, 0.5);     // dusty middle blotches
+  // sparse crumbs OUTSIDE the edge for broken borders
+  for (const run of roadRuns) {
+    c.fillStyle = '#5d5034';
+    const dense = densify(run.pts, 34);
+    for (let i = 0; i < dense.length; i++) {
+      const p = dense[i];
+      const h = hash2((p.x * 0.21) | 0, (p.y * 0.17) | 0);
+      if (h < 0.45) continue;
+      const prev = dense[Math.max(0, i - 1)], next = dense[Math.min(dense.length - 1, i + 1)];
+      const ang = Math.atan2(next.y - prev.y, next.x - prev.x) + Math.PI / 2;
+      const side = h > 0.72 ? 1 : -1;
+      const d = run.rd.w * 0.58 + (h * 53 % 1) * 14;
+      c.globalAlpha = 0.4;
+      c.beginPath();
+      c.arc(p.x + Math.cos(ang) * d * side, p.y + Math.sin(ang) * d * side, 2.5 + (h * 31 % 1) * 5, 0, 7);
+      c.fill();
+    }
+    c.globalAlpha = 1;
+  }
+  // wheel ruts + potholes
+  c.globalAlpha = 0.3;
+  for (const run of roadRuns) {
+    c.strokeStyle = '#544731';
+    c.lineWidth = 4;
     c.beginPath();
     run.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
     c.stroke();
-  };
-  for (const run of roadRuns) strokeRun(run, '#52462f', run.rd.w);          // shoulder
-  for (const run of roadRuns) strokeRun(run, '#6a5b39', run.rd.w - 5);      // packed dirt
-  // center wear + edge unevenness
-  c.globalAlpha = 0.35;
-  for (const run of roadRuns) strokeRun(run, '#5a4d30', run.rd.w * 0.45);
-  c.globalAlpha = 0.22;
-  for (const run of roadRuns) strokeRun(run, '#3f3622', 3);
+  }
   c.globalAlpha = 1;
+  for (const run of roadRuns) {
+    const dense = densify(run.pts, 90);
+    c.fillStyle = 'rgba(58,48,30,0.5)';
+    for (const p of dense) {
+      const h = hash2((p.x * 0.07) | 0, (p.y * 0.23) | 0);
+      if (h > 0.82) {
+        c.beginPath();
+        c.ellipse(p.x + (h * 91 % 1 - 0.5) * run.rd.w * 0.5, p.y + (h * 47 % 1 - 0.5) * run.rd.w * 0.5, 4 + h * 5, 3 + h * 3, h * 6, 0, 7);
+        c.fill();
+      }
+    }
+  }
 
   // ---- rail crossings: gravel pad + boards UNDER the rails so the road
   // runs smoothly across and the rails stay embedded (like a real crossing)

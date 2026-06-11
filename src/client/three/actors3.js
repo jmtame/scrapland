@@ -3,7 +3,7 @@
 // Pool pattern: sim object ref → mesh group, hidden when gone.
 import * as THREE from 'three';
 import { TILE, GUARD, OWNER } from '../../sim/config.js';
-import { GEO, mat, glowSprite, blobShadow } from './assets3.js';
+import { GEO, mat, glowSprite, blobShadow, tierWallMat, puffTexture } from './assets3.js';
 import { makeHumanoid, makeAnimalRig } from './rigs3.js';
 
 const TAU = Math.PI * 2;
@@ -48,46 +48,90 @@ class Pool {
 export function makeActors3(S, scene) {
   const persons = new Pool(scene, (colHex, gun) => makeHumanoid(colHex, { gun }));
   const animals = new Pool(scene, (type, r) => makeAnimalRig(type, r));
+  function basicDark() { return mat(0x191c15); }
+  const bx = (hex, sx, sy, sz, x, y, z) => {
+    const m = new THREE.Mesh(GEO.box, mat(hex));
+    m.scale.set(sx, sy, sz);
+    m.position.set(x, y, z);
+    return m;
+  };
+
+  // Rust minicopter: skeletal frame, exposed seat, mast rotor, tail rotor, skids
   const copters = new Pool(scene, (colHex) => {
     const g = new THREE.Group();
-    const hull = new THREE.Mesh(GEO.sphere, mat(colHex));
-    hull.scale.set(20, 12, 14);
-    hull.position.y = 12;
-    g.add(hull);
-    const tail = new THREE.Mesh(GEO.box, mat(0x2c3328));
-    tail.scale.set(26, 5, 5);
-    tail.position.set(-22, 14, 0);
-    g.add(tail);
-    const rotor = new THREE.Mesh(GEO.box, basicDark());
-    rotor.scale.set(52, 1.5, 5);
-    rotor.position.y = 22;
+    g.add(bx(0x33372e, 34, 3, 24, 2, 8, 0));                 // floor plate
+    g.add(bx(colHex, 15, 11, 15, 4, 15, 0));                 // seat
+    g.add(bx(colHex, 13, 16, 3.4, -3, 24, 0));               // seat back
+    g.add(bx(0x23261f, 9, 7, 12, 15, 13, 0));                // console
+    g.add(bx(0x3a3f37, 10, 10, 11, -11, 14, 0));             // engine block
+    const mast = new THREE.Mesh(GEO.cyl, mat(0x2c2f28));
+    mast.scale.set(2.4, 16, 2.4);
+    mast.position.set(-2, 32, 0);
+    g.add(mast);
+    // tail boom + fin + tail rotor
+    g.add(bx(0x2c2f28, 42, 3.6, 3.6, -32, 22, 0));
+    g.add(bx(0x33372e, 8, 12, 2.4, -51, 26, 0));             // fin
+    const tailRotor = bx(0x191c15, 1.4, 16, 2.6, -53, 24, 3);
+    g.add(tailRotor);
+    // skids
+    for (const sz of [-1, 1]) {
+      const skid = new THREE.Mesh(GEO.cyl, mat(0x23261f));
+      skid.scale.set(1.8, 52, 1.8);
+      skid.rotation.z = Math.PI / 2;
+      skid.position.set(2, 2.5, sz * 13);
+      g.add(skid);
+      g.add(bx(0x23261f, 2, 8, 2, -8, 5, sz * 13));
+      g.add(bx(0x23261f, 2, 8, 2, 12, 5, sz * 13));
+    }
+    const rotor = bx(0x191c15, 96, 1.6, 7, -2, 41, 0);
     g.add(rotor);
-    const sh = blobShadow(60);
+    // seated pilot (visible only when flying)
+    const pilot = new THREE.Group();
+    pilot.add(bx(colHex, 8, 11, 9, 4, 21, 0));
+    const phead = new THREE.Mesh(GEO.sphere, mat(0xc79c74));
+    phead.scale.set(4.5, 4.5, 4.5);
+    phead.position.set(4, 30, 0);
+    pilot.add(phead);
+    pilot.visible = false;
+    g.add(pilot);
+    const sh = blobShadow(86);
     sh.position.y = 1;
     g.add(sh);
-    g.userData = { rotor, sh };
+    g.userData = { rotor, tailRotor, sh, pilot };
     return g;
   });
-  function basicDark() { return mat(0x191c15); }
 
+  // Rust transport = tandem-rotor Chinook: long fuselage, two masts, ramp
   const transports = new Pool(scene, (colHex) => {
     const g = new THREE.Group();
-    const hull = new THREE.Mesh(GEO.sphere, mat(colHex));
-    hull.scale.set(34, 17, 22);
-    hull.position.y = 16;
-    g.add(hull);
-    const tail = new THREE.Mesh(GEO.box, mat(0x262c22));
-    tail.scale.set(40, 7, 7);
-    tail.position.set(-36, 20, 0);
-    g.add(tail);
-    const rotor = new THREE.Mesh(GEO.box, basicDark());
-    rotor.scale.set(84, 2, 7);
-    rotor.position.y = 30;
+    g.add(bx(colHex, 104, 30, 34, 0, 26, 0));                // fuselage
+    g.add(bx(0x262c22, 104, 8, 35, 0, 13, 0));               // belly
+    g.add(bx(0x1f2419, 18, 22, 30, 56, 24, 0));              // nose/cockpit
+    g.add(bx(0x9fc2d8, 6, 9, 26, 64, 30, 0));                // windshield
+    const ramp = bx(0x2c3328, 20, 4, 30, -56, 12, 0);
+    ramp.rotation.z = 0.5;
+    g.add(ramp);
+    for (let i = 0; i < 4; i++) g.add(bx(0x14181c, 7, 7, 2, 32 - i * 22, 30, 17.6)); // windows
+    for (let i = 0; i < 4; i++) g.add(bx(0x14181c, 7, 7, 2, 32 - i * 22, 30, -17.6));
+    g.add(bx(0x3a4034, 26, 10, 20, -38, 46, 0));             // rear pylon
+    const mastF = bx(0x2c2f28, 4, 12, 4, 38, 46, 0);
+    g.add(mastF);
+    const rotor = bx(0x191c15, 100, 2, 8, 38, 54, 0);
     g.add(rotor);
-    const sh = blobShadow(96);
+    const rotor2 = bx(0x191c15, 100, 2, 8, -38, 58, 0);
+    g.add(rotor2);
+    // wheels
+    for (const [wx, wz] of [[44, 14], [44, -14], [-40, 16], [-40, -16]]) {
+      const w = new THREE.Mesh(GEO.cyl, mat(0x14181c));
+      w.scale.set(4.5, 3, 4.5);
+      w.rotation.x = Math.PI / 2;
+      w.position.set(wx, 5, wz);
+      g.add(w);
+    }
+    const sh = blobShadow(150);
     sh.position.y = 1;
     g.add(sh);
-    g.userData = { rotor, sh };
+    g.userData = { rotor, rotor2, sh };
     return g;
   });
 
@@ -191,6 +235,67 @@ export function makeActors3(S, scene) {
     sGeo.attributes.position.needsUpdate = true;
   }
 
+  // train smoke: billowing gray puffs (grow, rise, drift with wind, fade)
+  const SMKMAX = 46;
+  const smokeSprites = [];
+  for (let i = 0; i < SMKMAX; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: puffTexture(), color: 0x868c92, transparent: true, opacity: 0,
+      depthWrite: false,
+    }));
+    sp.visible = false;
+    scene.add(sp);
+    smokeSprites.push(sp);
+  }
+  const smokes = [];
+  function spawnSmoke(x, y, h, big) {
+    if (smokes.length >= SMKMAX) smokes.shift();
+    smokes.push({ x, y, h, life: 2.8, max: 2.8, s0: 26 * big, drift: Math.random() * 7 });
+  }
+  function updateSmoke(dt) {
+    for (let i = smokes.length - 1; i >= 0; i--) {
+      const s = smokes[i];
+      s.life -= dt;
+      if (s.life <= 0) { smokes.splice(i, 1); continue; }
+      s.h += 50 * dt;
+      s.x += S.wind * 9 * dt;
+      s.y += Math.sin(s.drift) * 3 * dt;
+    }
+    smokeSprites.forEach((sp, i) => {
+      const s = smokes[i];
+      if (!s) { sp.visible = false; return; }
+      sp.visible = true;
+      const age = 1 - s.life / s.max;
+      const sc = s.s0 * (1 + age * 2.4);
+      sp.scale.set(sc, sc, 1);
+      sp.position.set(s.x, s.h, s.y);
+      sp.material.opacity = 0.36 * (s.life / s.max) * Math.min(1, age * 6 + 0.2);
+    });
+  }
+  // articulated train chain: world position+angle at arc offsets behind the head
+  function trainChain(tr, offsets) {
+    const pts = tr.pts;
+    let acc = 0;
+    for (let i = 0; i < tr.seg && i < pts.length - 1; i++) acc += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    acc += Math.hypot(tr.x - pts[Math.min(tr.seg, pts.length - 1)].x, tr.y - pts[Math.min(tr.seg, pts.length - 1)].y);
+    const out = [];
+    for (const off of offsets) {
+      const d = Math.max(0.1, acc + off);
+      let i = 0, run = 0;
+      while (i < pts.length - 2) {
+        const L = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        if (run + L >= d) break;
+        run += L;
+        i++;
+      }
+      const a = pts[i], b = pts[i + 1];
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const t = Math.max(0, Math.min(1, (d - run) / L));
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, a: Math.atan2(b.y - a.y, b.x - a.x) });
+    }
+    return out;
+  }
+
   // particles
   const PMAX = 1200;
   const pGeo = new THREE.BufferGeometry();
@@ -248,6 +353,8 @@ export function makeActors3(S, scene) {
           cg.position.set(u.copter.x, fly ? 70 : 0, u.copter.y);
           cg.rotation.y = -(u.copter.angle || 0);
           cg.userData.rotor.rotation.y = u.copter.rotor || 0;
+          cg.userData.tailRotor.rotation.z = (u.copter.rotor || 0) * 4;
+          cg.userData.pilot.visible = fly;
           cg.userData.sh.position.y = fly ? -68 : 1;
         }
         if (u.flying) continue;
@@ -279,6 +386,8 @@ export function makeActors3(S, scene) {
         cg.position.set(S.copter.x, fly ? 80 : 0, S.copter.y);
         cg.rotation.y = -(S.copter.angle || 0);
         cg.userData.rotor.rotation.y = (S.copter.rotor || 0) * 3;
+        cg.userData.tailRotor.rotation.z = (S.copter.rotor || 0) * 11;
+        cg.userData.pilot.visible = fly;
         cg.userData.sh.position.y = fly ? -78 : 1;
       }
       // ---- guards ----
@@ -308,31 +417,73 @@ export function makeActors3(S, scene) {
         const colHex = tr.owner === OWNER ? 0x7ec850 : parseInt((S.teams.find(t => t.owner === tr.owner) || { col: '#888888' }).col.slice(1), 16);
         const g = transports.get(tr, colHex);
         const fly = tr.state === 'fly' || tr.state === 'return' || tr.riders.length > 0;
-        g.position.set(tr.x, fly ? 110 : 4, tr.y);
+        g.position.set(tr.x, fly ? 110 : 2, tr.y);
         g.rotation.y = -tr.angle;
         g.userData.rotor.rotation.y = tr.rotor;
+        g.userData.rotor2.rotation.y = -tr.rotor; // counter-rotating tandem
         g.userData.sh.position.y = fly ? -106 : 1;
       }
       for (const tr of S.trains) {
         const g = simpleMeshes.get(tr, () => {
           const gg = new THREE.Group();
-          const loco = new THREE.Mesh(GEO.box, mat(0x3a4048));
-          loco.scale.set(48, 30, 26);
-          loco.position.y = 15;
+          // locomotive: riveted metal, cab, chimney, cowcatcher, headlight
+          const locoM = tierWallMat('metal').clone();
+          locoM.color.setScalar(0.62);
+          const loco = new THREE.Mesh(GEO.box, locoM);
+          loco.scale.set(54, 30, 26);
+          loco.position.y = 17;
           gg.add(loco);
-          for (const off of [-46, -90]) {
-            const car = new THREE.Mesh(GEO.box, mat(0x5a4a36));
-            car.scale.set(38, 24, 24);
-            car.position.set(off, 12, 0);
-            gg.add(car);
-          }
-          const light = glowSprite(0xffe9a3, 40);
-          light.position.set(28, 14, 0);
+          gg.add(bx(0x23272c, 18, 14, 27, -14, 38, 0));      // cab
+          gg.add(bx(0x9fc2d8, 4, 7, 22, -4, 39, 0));         // cab glass
+          const chim = new THREE.Mesh(GEO.cyl, mat(0x1c2026));
+          chim.scale.set(4.5, 12, 4.5);
+          chim.position.set(16, 38, 0);
+          gg.add(chim);
+          const cow = bx(0x2a2e33, 12, 10, 24, 30, 8, 0);
+          cow.rotation.z = -0.5;
+          gg.add(cow);
+          const light = glowSprite(0xffe9a3, 44);
+          light.position.set(30, 20, 0);
           gg.add(light);
+          // boxcars: plank-textured, per-car tint, dark roofs
+          const cars = [];
+          for (let ci = 0; ci < 4; ci++) {
+            const car = new THREE.Group();
+            const m2 = tierWallMat('wood').clone();
+            m2.color.setScalar(0.78 + (ci % 2) * 0.14);
+            const body = new THREE.Mesh(GEO.box, m2);
+            body.scale.set(46, 26, 24);
+            body.position.y = 15;
+            car.add(body);
+            const roof = bx(0x2c2620, 48, 3.5, 26, 0, 30, 0);
+            car.add(roof);
+            car.add(bx(0x1f1a14, 8, 12, 25, 0, 14, 0));      // side door
+            gg.add(car);
+            cars.push(car);
+          }
+          gg.userData = { cars, smokeT: 0 };
           return gg;
         });
-        g.position.set(tr.x, 0, tr.y);
-        g.rotation.y = -tr.ang;
+        // articulate: cars follow the rail behind the loco
+        const chain = trainChain(tr, [0, -64, -116, -168, -220]);
+        const head = chain[0];
+        g.position.set(head.x, 0, head.y);
+        g.rotation.y = -head.a;
+        g.userData.cars.forEach((car, ci) => {
+          const w = chain[ci + 1];
+          // world → loco-local
+          const dx = w.x - head.x, dy = w.y - head.y;
+          const ca = Math.cos(head.a), sa = Math.sin(head.a);
+          car.position.set(dx * ca + dy * sa, 0, -dx * sa + dy * ca);
+          car.rotation.y = -(w.a - head.a);
+        });
+        // billowing smoke from the chimney
+        g.userData.smokeT -= dt;
+        if (g.userData.smokeT <= 0) {
+          g.userData.smokeT = 0.12;
+          const sx = head.x + Math.cos(head.a) * 16, sy = head.y + Math.sin(head.a) * 16;
+          spawnSmoke(sx, sy, 40, 1.0);
+        }
       }
       for (const cv of S.convoys) {
         if (cv.dead) continue;
@@ -371,23 +522,44 @@ export function makeActors3(S, scene) {
         const pt = S.patrol;
         const g = simpleMeshes.get('patrol', () => {
           const gg = new THREE.Group();
-          const hull = new THREE.Mesh(GEO.sphere, mat(0x48543e));
-          hull.scale.set(32, 15, 18);
-          gg.add(hull);
-          const tail = new THREE.Mesh(GEO.box, mat(0x333c30));
-          tail.scale.set(36, 6, 6);
-          tail.position.x = -34;
-          gg.add(tail);
-          const rotor = new THREE.Mesh(GEO.box, basicDark());
-          rotor.scale.set(96, 2, 8);
-          rotor.position.y = 14;
+          gg.add(bx(0x48543e, 76, 20, 20, 0, 0, 0));         // fuselage
+          gg.add(bx(0x3a4434, 76, 6, 21, 0, -12, 0));        // belly
+          const nose = new THREE.Mesh(GEO.sphere, mat(0x48543e));
+          nose.scale.set(14, 11, 10);
+          nose.position.set(40, -1, 0);
+          gg.add(nose);
+          gg.add(bx(0x14181c, 14, 8, 14, 26, 8, 0));         // canopy
+          gg.add(bx(0x9fc2d8, 4, 6, 12, 34, 7, 0));          // glass
+          // chin gun
+          gg.add(bx(0x1e2226, 10, 6, 6, 36, -13, 0));
+          gg.add(bx(0x14181c, 14, 2.6, 2.6, 46, -13, 0));
+          // stub wings + rocket pods
+          for (const sz of [-1, 1]) {
+            gg.add(bx(0x3a4434, 16, 4, 26, 2, 2, sz * 22));
+            for (const pz of [16, 26]) {
+              const pod = new THREE.Mesh(GEO.cyl, mat(0x2b3026));
+              pod.scale.set(4.5, 16, 4.5);
+              pod.rotation.z = Math.PI / 2;
+              pod.position.set(4, -3, sz * pz);
+              gg.add(pod);
+            }
+          }
+          // tail boom, fin, tail rotor
+          gg.add(bx(0x333c30, 52, 6, 6, -58, 4, 0));
+          gg.add(bx(0x3a4434, 9, 18, 3, -82, 12, 0));
+          const tailRotor = bx(0x191c15, 1.6, 20, 3, -84, 10, 4);
+          gg.add(tailRotor);
+          const mast = bx(0x2c2f28, 5, 8, 5, 0, 13, 0);
+          gg.add(mast);
+          const rotor = bx(0x191c15, 124, 2.2, 9, 0, 19, 0);
           gg.add(rotor);
-          gg.userData = { rotor };
+          gg.userData = { rotor, tailRotor };
           return gg;
         });
         g.position.set(pt.x, 150, pt.y);
         g.rotation.y = -pt.angle;
         g.userData.rotor.rotation.y = pt.rotor;
+        g.userData.tailRotor.rotation.z = pt.rotor * 4;
       }
       if (S.plane) {
         const g = simpleMeshes.get('plane', () => {
@@ -559,6 +731,7 @@ export function makeActors3(S, scene) {
       // ---- harvest FX (from sim events) ----
       for (const e of S.events) if (e.type === 'harvest' && rig.inView(e.x, e.y, 300)) spawnHarvestFx(e);
       updateHarvestFx(dt);
+      updateSmoke(dt);
 
       // ---- footprints ----
       let fn = 0;
