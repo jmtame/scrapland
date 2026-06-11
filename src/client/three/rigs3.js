@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GEO, mat, blobShadow } from './assets3.js';
 
 const SKIN = 0xc79c74;
+const TAU2 = Math.PI * 2;
 
 function box(hex, sx, sy, sz, x, y, z) {
   const m = new THREE.Mesh(GEO.box, mat(hex));
@@ -43,13 +44,16 @@ export function makeHumanoid(colHex, opts = {}) {
   parts.shadow.position.y = 1;
   g.add(parts.shadow);
 
-  // legs (pivot at hip)
+  // lower body: hips + legs rotate toward the TRAVEL direction,
+  // independent of where the torso/gun are aiming
+  parts.lower = new THREE.Group();
+  g.add(parts.lower);
   for (const side of ['L', 'R']) {
     const pivot = new THREE.Group();
     pivot.position.set(0, 12, side === 'L' ? -3.2 : 3.2);
     const leg = box(0x32302a, 4.6, 12, 4.6, 0, -6, 0);
     pivot.add(leg);
-    g.add(pivot);
+    parts.lower.add(pivot);
     parts['leg' + side] = pivot;
   }
   // torso
@@ -125,12 +129,36 @@ export function makeHumanoid(colHex, opts = {}) {
       parts.torsoShade.material = mat(shade(hex, 0.7));
       band.material = mat(hex);
     },
-    animate(t, moveAmt, gathering, jack) {
-      const ph = t * 11 + g.userData.phase;
-      const swing = Math.sin(ph) * 0.75 * moveAmt;
+    animate(t, moveAmt, gathering, jack, relMove) {
+      const u2 = g.userData;
+      const dtA = Math.min(0.1, Math.max(0.001, t - (u2.lastT ?? t)));
+      u2.lastT = t;
+      // hips face travel; torso keeps aiming. Backward-ish travel (>118°
+      // off-aim) backpedals: hips stay forward, stride reverses + shortens.
+      let hipsTarget = u2.hipsCur ?? 0, strideDir = 1, strideAmp = 1;
+      if (moveAmt > 0.05 && relMove !== null && relMove !== undefined) {
+        let a = relMove % TAU2;
+        if (a > Math.PI) a -= TAU2;
+        if (a < -Math.PI) a += TAU2;
+        if (Math.abs(a) > 2.06) {
+          strideDir = -1; strideAmp = 0.72;
+          a = a > 0 ? a - Math.PI : a + Math.PI;
+        }
+        hipsTarget = a;
+      } else if (moveAmt <= 0.05) hipsTarget = 0;
+      let cur = u2.hipsCur ?? 0;
+      let d = (hipsTarget - cur) % TAU2;
+      if (d > Math.PI) d -= TAU2;
+      if (d < -Math.PI) d += TAU2;
+      cur += d * Math.min(1, dtA * 14);
+      u2.hipsCur = cur;
+      parts.lower.rotation.y = -cur;
+
+      const ph = t * 11 + u2.phase;
+      const swing = Math.sin(ph) * 0.75 * moveAmt * strideAmp * strideDir;
       parts.legL.rotation.z = swing;
       parts.legR.rotation.z = -swing;
-      parts.armL.rotation.z = -swing * 0.7;
+      parts.armL.rotation.z = -swing * 0.55;
       g.position.y = Math.abs(Math.sin(ph)) * 1.4 * moveAmt;
       if (gathering && jack) {
         // jackhammer: braced arm + violent high-frequency judder through the

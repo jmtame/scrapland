@@ -226,7 +226,12 @@ export function makeActors3(S, scene) {
     u.setColor(colHex);
     if (opts.gun) u.setGun(opts.gun);
     u.setArmor(opts.bodyArmor || 0, opts.facemask || 0);
-    u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering, !!opts.jack);
+    // movement direction relative to facing → natural leg orientation
+    let relMove = null;
+    if ((opts.vx || opts.vy) && Math.hypot(opts.vx, opts.vy) > 18) {
+      relMove = Math.atan2(opts.vy, opts.vx) - angle;
+    }
+    u.animate(S.t, opts.moveAmt ?? 0, !!opts.gathering, !!opts.jack, relMove);
     if (u.judder) { g.position.x += u.judder.x; g.position.z += u.judder.z; }
   }
 
@@ -251,7 +256,7 @@ export function makeActors3(S, scene) {
         const moveAmt = Math.min(1, Math.hypot(u.vx, u.vy) / 120);
         syncPerson(g, u.x, u.y, u.angle, colHex, {
           gun: u.gathering ? (u.jack ? 'jack' : 'tool') : u.gun, moveAmt, gathering: u.gathering,
-          jack: u.jack, bodyArmor: u.bodyArmor, facemask: u.facemask,
+          jack: u.jack, bodyArmor: u.bodyArmor, facemask: u.facemask, vx: u.vx, vy: u.vy,
         });
       }
       // ---- player ----
@@ -263,7 +268,7 @@ export function makeActors3(S, scene) {
         syncPerson(g, p.x, p.y, p.angle, p.hurt > 0 ? 0xc47a5e : 0x7a8a50, {
           gun: S.slot === 0 && S.jackhammer ? 'jack' : SLOT_GUN[S.slot] || 'pistol', moveAmt,
           gathering: p.swing > 0 && S.slot === 0,
-          jack: jacking, bodyArmor: p.bodyArmor, facemask: p.facemask,
+          jack: jacking, bodyArmor: p.bodyArmor, facemask: p.facemask, vx: p.vx, vy: p.vy,
         });
         if (p.dead) g.visible = false;
       }
@@ -280,7 +285,7 @@ export function makeActors3(S, scene) {
         if (gd.dead || !rig.inView(gd.x, gd.y, 150)) continue;
         const g = persons.get(gd, 0xbd5e2c, 'rifle');
         const moveAmt = Math.min(1, Math.hypot(gd.vx || 0, gd.vy || 0) / 90 + 0.2);
-        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { gun: 'rifle', moveAmt, facemask: 1 });
+        syncPerson(g, gd.x, gd.y, gd.angle, 0xbd5e2c, { gun: 'rifle', moveAmt, facemask: 1, vx: gd.vx, vy: gd.vy });
       }
       // ---- animals ----
       for (const a of S.animals) {
