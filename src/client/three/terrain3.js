@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { WORLD, TILE } from '../../sim/config.js';
 import { hash2, smooth01, clamp } from '../../sim/util.js';
 
-const SCALE = 0.3; // texture px per world px (≈4147×2765)
+const SCALE = 0.45; // texture px per world px (≈6221×4147) — sharp at play zoom
 
 export function makeTerrain3(S, scene) {
   const W = Math.round(WORLD.w * SCALE), H = Math.round(WORLD.h * SCALE);
@@ -19,7 +19,7 @@ export function makeTerrain3(S, scene) {
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
 
   // map texture has a TRANSPARENT ocean so the animated water shows through
@@ -217,48 +217,104 @@ export function paintMap(S, c) {
     c.beginPath(); c.arc(m.x, m.y, m.r, 0, 7); c.fill();
   }
 
-  // roads
+  // ---- roads: CONTINUOUS polyline runs (no per-segment cap seams).
+  // Two global passes (rim for all roads, then fill for all) so junctions
+  // and overlaps merge into one seamless surface.
   c.lineCap = 'round';
+  c.lineJoin = 'round';
+  const roadRuns = [];
   for (const rd of S.world.roads) {
-    for (let i = 0; i < rd.pts.length - 1; i++) {
-      const a = rd.pts[i], b = rd.pts[i + 1];
-      const fade = Math.min(rd.fade[i], rd.fade[i + 1]);
-      if (fade <= 0.02) continue;
-      c.globalAlpha = fade;
-      c.strokeStyle = '#4f4430'; c.lineWidth = rd.w;
-      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
-      c.strokeStyle = '#665838'; c.lineWidth = rd.w - 4;
-      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
-      c.globalAlpha = 1;
+    let run = null;
+    for (let i = 0; i < rd.pts.length; i++) {
+      if (rd.fade[i] > 0.05) {
+        if (!run) run = { rd, pts: [] };
+        run.pts.push(rd.pts[i]);
+      } else if (run) { if (run.pts.length > 1) roadRuns.push(run); run = null; }
     }
+    if (run && run.pts.length > 1) roadRuns.push(run);
   }
-  // rails
+  const strokeRun = (run, col, w) => {
+    c.strokeStyle = col;
+    c.lineWidth = w;
+    c.beginPath();
+    run.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+    c.stroke();
+  };
+  for (const run of roadRuns) strokeRun(run, '#52462f', run.rd.w);          // shoulder
+  for (const run of roadRuns) strokeRun(run, '#6a5b39', run.rd.w - 5);      // packed dirt
+  // center wear + edge unevenness
+  c.globalAlpha = 0.35;
+  for (const run of roadRuns) strokeRun(run, '#5a4d30', run.rd.w * 0.45);
+  c.globalAlpha = 0.22;
+  for (const run of roadRuns) strokeRun(run, '#3f3622', 3);
+  c.globalAlpha = 1;
+
+  // ---- rail crossings: gravel pad + boards UNDER the rails so the road
+  // runs smoothly across and the rails stay embedded (like a real crossing)
   const GA = 11;
+  for (const cr of S.world.crossings) {
+    const ca = Math.cos(cr.railAng), sa = Math.sin(cr.railAng);
+    c.save();
+    c.translate(cr.x, cr.y);
+    c.rotate(cr.railAng);
+    // gravel blend pad (soft edges)
+    const pg = c.createRadialGradient(0, 0, 10, 0, 0, 64);
+    pg.addColorStop(0, 'rgba(116,104,78,0.95)');
+    pg.addColorStop(0.7, 'rgba(108,96,72,0.7)');
+    pg.addColorStop(1, 'rgba(100,90,68,0)');
+    c.fillStyle = pg;
+    c.beginPath(); c.ellipse(0, 0, 64, 50, 0, 0, 7); c.fill();
+    // crossing boards parallel to the rails (between + outside the rail pair)
+    c.fillStyle = '#7b6a45';
+    for (const off of [-GA - 7, 0, GA + 7]) {
+      c.fillRect(-34, off - 3.4, 68, 6.8);
+    }
+    c.strokeStyle = 'rgba(60,50,34,0.5)';
+    c.lineWidth = 1.2;
+    for (const off of [-GA - 7, 0, GA + 7]) c.strokeRect(-34, off - 3.4, 68, 6.8);
+    c.restore();
+  }
+
+  // ---- rails: continuous ballast + rails; ties skipped through crossings
+  const nearCrossing = (x, y) => S.world.crossings.some(cr => (x - cr.x) * (x - cr.x) + (y - cr.y) * (y - cr.y) < 52 * 52);
   for (const rl of S.world.rails) {
+    const path = () => {
+      c.beginPath();
+      rl.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+    };
+    // ballast (drawn semi-transparent over crossing pads so they blend)
+    path(); c.strokeStyle = 'rgba(87,77,64,0.85)'; c.lineWidth = 2 * GA + 16; c.stroke();
+    path(); c.strokeStyle = 'rgba(107,95,78,0.85)'; c.lineWidth = 2 * GA + 7; c.stroke();
+    // ties
+    c.strokeStyle = '#3a2e1d';
+    c.lineWidth = 4.5;
     for (let i = 0; i < rl.pts.length - 1; i++) {
       const a = rl.pts[i], b = rl.pts[i + 1];
-      c.strokeStyle = '#574d40'; c.lineWidth = 2 * GA + 16;
-      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
-      c.strokeStyle = '#6b5f4e'; c.lineWidth = 2 * GA + 7;
-      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
       const len = Math.hypot(b.x - a.x, b.y - a.y);
       const ang = Math.atan2(b.y - a.y, b.x - a.x);
       const px = -Math.sin(ang), py = Math.cos(ang);
-      c.strokeStyle = '#3a2e1d'; c.lineWidth = 4.5;
       for (let d = 8; d < len; d += 24) {
         const tx = a.x + Math.cos(ang) * d, ty = a.y + Math.sin(ang) * d;
+        if (nearCrossing(tx, ty)) continue;
         c.beginPath();
         c.moveTo(tx - px * (GA + 5), ty - py * (GA + 5));
         c.lineTo(tx + px * (GA + 5), ty + py * (GA + 5));
         c.stroke();
       }
-      c.strokeStyle = '#9aa1a8'; c.lineWidth = 2.6;
-      for (const off of [-GA, GA]) {
-        c.beginPath();
-        c.moveTo(a.x + px * off, a.y + py * off);
-        c.lineTo(b.x + px * off, b.y + py * off);
-        c.stroke();
+    }
+    // steel rails: continuous offset polylines (always on top, embedded look)
+    c.strokeStyle = '#a4abb2';
+    c.lineWidth = 2.8;
+    for (const off of [-GA, GA]) {
+      c.beginPath();
+      for (let i = 0; i < rl.pts.length; i++) {
+        const prev = rl.pts[Math.max(0, i - 1)], next = rl.pts[Math.min(rl.pts.length - 1, i + 1)];
+        const ang = Math.atan2(next.y - prev.y, next.x - prev.x);
+        const px = -Math.sin(ang), py = Math.cos(ang);
+        const x = rl.pts[i].x + px * off, y = rl.pts[i].y + py * off;
+        i ? c.lineTo(x, y) : c.moveTo(x, y);
       }
+      c.stroke();
     }
   }
   // light decor dots (texture-level variety; real flora is 3D)

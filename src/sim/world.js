@@ -136,12 +136,13 @@ export function buildWorld(S) {
   const railDist = (x, y) => polyDist(x, y, rails);
   const pathDist = (x, y) => polyDist(x, y, roads);
 
-  // road fade where rails cross + taper out approaching the coast
+  // road fade: coast taper only. Roads now run CONTINUOUSLY across rails —
+  // the renderer draws a proper crossing pad there instead of a gap.
   for (const rd of roads) {
     rd.fade = rd.pts.map(p => {
       const lf = landFactor(p.x, p.y);
       if (lf <= 0.015) return 0;
-      return smooth01((railDist(p.x, p.y) - 17) / 9) * smooth01((lf - 0.015) / 0.05);
+      return smooth01((lf - 0.015) / 0.05);
     });
     rd.poles = rd.poles.filter(p => landFactor(p.x, p.y) > 0.03);
   }
