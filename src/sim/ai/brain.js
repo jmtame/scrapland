@@ -102,12 +102,14 @@ export function updateBrains(S, dt) {
     brain.attack = atkCount > 0 || S.units.some(u => u.raid === team && u.state === 'raid' && !u.dead);
     brain.aggressor = team.owner === S.aggressorOwner || S.aliveBases <= 3;
 
-    // hard-team intel tripwire
+    // hard-team intel tripwire — intel is a WARNING, not a garrison order
+    // (v1 lesson: map-wide staging stalls matches). Only raiders already
+    // CLOSE (1400) pull defenders; the wide tripwire is awareness only.
     let inbound = 0;
     if (team.hard) {
       for (const u of S.units) {
         if (u.owner === team.owner || u.dead || u.eliminated) continue;
-        if (u.state === 'raid' && u.raid === team && recs.some(r => dist2(u.x, u.y, r.hx, r.hy) < AI.TRIPWIRE * AI.TRIPWIRE)) inbound++;
+        if (u.state === 'raid' && u.raid === team && recs.some(r => dist2(u.x, u.y, r.hx, r.hy) < 1400 * 1400)) inbound++;
       }
     }
     const threat = Math.max(atkCount, inbound);

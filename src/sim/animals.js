@@ -28,6 +28,7 @@ export function updateAnimals(S, dt) {
       let botT = null, botD = 1e9;
       for (const u of S.units) {
         if (u.dead || u.flying || u.eliminated) continue;
+        if (inSafeZone(S, u.x, u.y)) continue; // untouchable — don't fixate
         const d = dist(a.x, a.y, u.x, u.y);
         if (d < def.detect && d < botD && !wallBlocksView(S, a.x, a.y, u.x, u.y)) { botD = d; botT = u; }
       }
@@ -116,6 +117,14 @@ export function updateAnimals(S, dt) {
           break;
         }
       }
+      // and steer clear of the safe-zone rim BEFORE touching it
+      {
+        const shop = S.world.shop;
+        if (dist2(a.x, a.y, shop.x, shop.y) < (620 + 140) * (620 + 140)) {
+          a.avoidA = Math.atan2(a.y - shop.y, a.x - shop.x) + S.rng.rand(-0.3, 0.3);
+          a.avoidT = 1.6; a.dir = a.avoidA;
+        }
+      }
       mx = Math.cos(a.dir); my = Math.sin(a.dir);
     }
 
@@ -138,8 +147,21 @@ export function updateAnimals(S, dt) {
 }
 
 function moveAnimal(S, a, nx, ny) {
-  // animals never enter the safe zone
-  if (inSafeZone(S, nx, ny)) return false;
+  // animals never enter the safe zone — but they SLIDE along its rim and
+  // steer away instead of freezing (frozen + dir rerolls looked like spinning)
+  if (inSafeZone(S, nx, ny)) {
+    const shop = S.world.shop;
+    a.avoidA = Math.atan2(a.y - shop.y, a.x - shop.x) + S.rng.rand(-0.6, 0.6);
+    a.avoidT = 1.6;
+    a.dir = a.avoidA;
+    a.aggro = null; a.foe = null; // never claw at the bubble
+    // slide: keep whichever axis component stays outside the zone
+    let slid = false;
+    if (!inSafeZone(S, nx, a.y) && !blocked(S, nx, a.y, a.r * 0.7)) { a.x = nx; slid = true; }
+    else if (!inSafeZone(S, a.x, ny) && !blocked(S, a.x, ny, a.r * 0.7)) { a.y = ny; slid = true; }
+    a.x = clamp(a.x, 20, WORLD.w - 20); a.y = clamp(a.y, 20, WORLD.h - 20);
+    return slid;
+  }
   let moved = false;
   if (blocked(S, a.x, a.y, a.r * 0.7)) { a.x = nx; a.y = ny; moved = true; } // escape rule
   else {
@@ -165,6 +187,7 @@ export function respawnAnimal(S, a) {
       y = S.rng.rand(90, WORLD.h - 90);
     }
     if (dist(x, y, S.player.x, S.player.y) < 520) continue;
+    if (dist(x, y, S.world.shop.x, S.world.shop.y) < 620 + 200) continue; // clear of the safe zone
     if (S.world.landFactor(x, y) < 0.05) continue;
     if (S.world.lakeAt(x, y) && !a.lake) continue;
     if (blocked(S, x, y, a.r)) continue;

@@ -301,7 +301,7 @@ export function spawnConvoy(S) {
   for (const rd of S.world.roads) {
     let start = -1, best = null;
     for (let i = 0; i <= rd.pts.length; i++) {
-      const ok = i < rd.pts.length && S.world.landFactor(rd.pts[i].x, rd.pts[i].y) > 0.02;
+      const ok = i < rd.pts.length && rd.fade[i] > 0.05; // fade encodes coast + lakes
       if (ok && start === -1) start = i;
       if (!ok && start !== -1) {
         if (!best || i - start > best.len) best = { start, len: i - start };

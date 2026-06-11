@@ -783,12 +783,29 @@ export function updateLoot(S, dt) {
 
 function collectPlayer(S, L) {
   const w = S.weapons;
-  if (L.kind === 'ammo') { w.rifle.reserve += L.amt; w.pistol.reserve += Math.ceil(L.amt * 0.4); w.shotgun.reserve += Math.ceil(L.amt * 0.3); }
-  else if (L.kind === 'rocket') w.rocket.reserve += L.amt;
-  else if (L.kind === 'satchel') S.inv.scrap += L.amt * 8;
-  else if (L.kind === 'sniper') { S.owned.sniper = true; w.sniper.reserve += 12; addFloat(S, S.player.x, S.player.y - 20, 'SNIPER unlocked!', '#bfe3ff'); }
-  else if (L.kind === 'gun') { if (L.gun && S.owned[L.gun] !== undefined) { S.owned[L.gun] = true; w[L.gun].reserve += L.gun === 'hmg' ? 60 : 30; } }
-  else S.inv[L.kind] = (S.inv[L.kind] || 0) + L.amt;
+  const p = S.player;
+  if (L.kind === 'ammo') {
+    w.rifle.reserve += L.amt; w.pistol.reserve += Math.ceil(L.amt * 0.4); w.shotgun.reserve += Math.ceil(L.amt * 0.3);
+    addFloat(S, p.x, p.y - 20, '+' + L.amt + ' ammo', '#ffe08a');
+  } else if (L.kind === 'rocket') {
+    w.rocket.reserve += L.amt;
+    addFloat(S, p.x, p.y - 20, '+' + L.amt + ' rocket', '#ff9a5a');
+  } else if (L.kind === 'satchel') {
+    S.inv.scrap += L.amt * 8;
+    addFloat(S, p.x, p.y - 20, '+' + (L.amt * 8) + ' scrap', '#d6dce0');
+  } else if (L.kind === 'sniper') {
+    S.owned.sniper = true; w.sniper.reserve += 12;
+    addFloat(S, p.x, p.y - 20, 'SNIPER unlocked!', '#bfe3ff');
+  } else if (L.kind === 'gun') {
+    if (L.gun && S.owned[L.gun] !== undefined) {
+      S.owned[L.gun] = true; w[L.gun].reserve += L.gun === 'hmg' ? 60 : 30;
+      addFloat(S, p.x, p.y - 20, '+' + L.gun.toUpperCase(), '#bfe3ff');
+    }
+  } else {
+    S.inv[L.kind] = (S.inv[L.kind] || 0) + L.amt;
+    const KC = { wood: '#b98446', stone: '#aab1b8', metal: '#e8a24e', scrap: '#d6dce0' };
+    addFloat(S, p.x, p.y - 20, '+' + L.amt + ' ' + L.kind, KC[L.kind] || '#d8e0c2');
+  }
 }
 
 function collectBot(S, u, L) {

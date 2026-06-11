@@ -294,6 +294,12 @@ export function dropFootprint(S, e, a) {
   if (e.fpAcc < 30) return;
   e.fpAcc = 0;
   e.fpSide = !e.fpSide;
+  // wading: no prints on water — splash instead
+  const lake = S.world.lakeAt(e.x, e.y);
+  if (lake && !lake.frozen) {
+    S.events.push({ type: 'splash', x: e.x, y: e.y });
+    return;
+  }
   const s = e.fpSide ? 5 : -5;
   S.footprints.push({ x: e.x - Math.sin(a) * s, y: e.y + Math.cos(a) * s, a, t: 0 });
   if (S.footprints.length > 700) S.footprints.shift();
