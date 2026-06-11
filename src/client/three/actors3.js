@@ -624,26 +624,34 @@ export function makeActors3(S, scene) {
         g.userData.light.visible = on;
         g.userData.light.material.color.setHex(c.started ? 0xffb84a : 0xd23c28);
       }
-      // ---- projectiles ----
+      // ---- projectiles: tracer = hot head + tapered fading tail ----
       for (const b of S.bullets) {
         const g = simpleMeshes.get(b, () => {
           const gg = new THREE.Group();
-          // bright opaque core — reads against any background
-          const core = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffe9a3 }));
-          core.scale.set(34, 3.6, 3.6);
-          gg.add(core);
-          // additive halo around it
-          const halo = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffe9a3, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
-          halo.scale.set(40, 8, 8);
-          gg.add(halo);
-          gg.userData = { core, halo };
+          const head = new THREE.Mesh(GEO.sphere, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+          head.scale.set(3.4, 3, 3);
+          gg.add(head);
+          // tapered tail cone pointing backward
+          const tail = new THREE.Mesh(GEO.cone, new THREE.MeshBasicMaterial({ color: 0xffb054, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+          tail.scale.set(2.6, 30, 2.6);
+          tail.rotation.z = Math.PI / 2; // apex toward -x (behind)
+          tail.position.x = -15;
+          gg.add(tail);
+          const tail2 = new THREE.Mesh(GEO.cone, new THREE.MeshBasicMaterial({ color: 0xff9434, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }));
+          tail2.scale.set(4.5, 44, 4.5);
+          tail2.rotation.z = Math.PI / 2;
+          tail2.position.x = -22;
+          gg.add(tail2);
+          gg.userData = { head, tail, tail2 };
           return gg;
         });
         g.position.set(b.x, 18, b.y);
         g.rotation.y = -Math.atan2(b.vy, b.vx);
-        const col = b.col === 'hmg' ? 0xff5a2a : b.ricochet ? 0x86d8ff : 0xffe9a3;
-        g.userData.core.material.color.setHex(col);
-        g.userData.halo.material.color.setHex(col);
+        const hot = b.col === 'hmg' ? 0xff6a30 : b.ricochet ? 0x9ae2ff : 0xffd9a0;
+        const warm = b.col === 'hmg' ? 0xe83c14 : b.ricochet ? 0x5cb8e8 : 0xffb054;
+        g.userData.head.material.color.setHex(hot);
+        g.userData.tail.material.color.setHex(warm);
+        g.userData.tail2.material.color.setHex(warm);
       }
       for (const r of S.rockets) {
         const g = simpleMeshes.get(r, () => {

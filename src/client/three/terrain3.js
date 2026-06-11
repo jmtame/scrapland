@@ -76,6 +76,39 @@ export function makeTerrain3(S, scene) {
   shimmer2.renderOrder = -2;
   scene.add(shimmer2);
 
+  // live lake water: lake-shaped translucent surface with drifting glints
+  // over the painted depth color (frozen lakes keep their painted ice)
+  const lakeTexes = [];
+  for (const L of S.world.lakes) {
+    if (L.frozen) continue;
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const r = L.r * L.wob[i % 28];
+      const px = Math.cos(a) * r, py = -Math.sin(a) * r * 0.84;
+      i ? shape.lineTo(px, py) : shape.moveTo(px, py);
+    }
+    const geo = new THREE.ShapeGeometry(shape);
+    const water = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0x2e6478, transparent: true, opacity: 0.45, depthWrite: false,
+    }));
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(L.x, 1.2, L.y);
+    water.renderOrder = 1;
+    scene.add(water);
+    const gtex = noiseTex.clone();
+    gtex.wrapS = gtex.wrapT = THREE.RepeatWrapping;
+    gtex.repeat.set(0.045, 0.045);
+    const glint = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      map: gtex, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    glint.rotation.x = -Math.PI / 2;
+    glint.position.set(L.x, 1.5, L.y);
+    glint.renderOrder = 2;
+    scene.add(glint);
+    lakeTexes.push(gtex);
+  }
+
   // sky dome + sun disc
   const skyCv = document.createElement('canvas');
   skyCv.width = 4; skyCv.height = 256;
@@ -103,6 +136,7 @@ export function makeTerrain3(S, scene) {
       const m1 = shimmer.material.map, m2 = shimmer2.material.map;
       m1.offset.x += dt * 0.0022; m1.offset.y += dt * 0.0013;
       m2.offset.x -= dt * 0.0011; m2.offset.y += dt * 0.0008;
+      for (const gt of lakeTexes) { gt.offset.x += dt * 0.006; gt.offset.y += dt * 0.0035; }
       // sky follows the camera target so the dome never shows an edge
       sky.position.set(rig.cx, -40, rig.cy);
       const light = rig.lightLevel();

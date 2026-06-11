@@ -136,16 +136,7 @@ export function buildWorld(S) {
   const railDist = (x, y) => polyDist(x, y, rails);
   const pathDist = (x, y) => polyDist(x, y, roads);
 
-  // road fade: coast taper only. Roads now run CONTINUOUSLY across rails —
-  // the renderer draws a proper crossing pad there instead of a gap.
-  for (const rd of roads) {
-    rd.fade = rd.pts.map(p => {
-      const lf = landFactor(p.x, p.y);
-      if (lf <= 0.015) return 0;
-      return smooth01((lf - 0.015) / 0.05);
-    });
-    rd.poles = rd.poles.filter(p => landFactor(p.x, p.y) > 0.03);
-  }
+  // (road fade is computed after lakes are generated — see below)
 
   // ---- crossings ----
   const crossings = [];
@@ -182,6 +173,22 @@ export function buildWorld(S) {
     for (const L of lakes) if (dist2(x, y, L.x, L.y) < L.r * L.r) return L;
     return null;
   };
+
+  // road fade: taper at the coast AND at lake shores (roads end naturally
+  // at water — never across it). Rails still get crossing pads.
+  for (const rd of roads) {
+    rd.fade = rd.pts.map(p => {
+      const lf = landFactor(p.x, p.y);
+      if (lf <= 0.015) return 0;
+      let f = smooth01((lf - 0.015) / 0.05);
+      for (const L of lakes) {
+        const dEdge = dist(p.x, p.y, L.x, L.y) - L.r * 1.08;
+        f *= smooth01((dEdge - 12) / 70);
+      }
+      return f;
+    });
+    rd.poles = rd.poles.filter(p => landFactor(p.x, p.y) > 0.03 && !lakes.some(L => dist(p.x, p.y, L.x, L.y) < L.r + 40));
+  }
 
   // (the old dedicated straight convoy lane is gone — convoys now run a
   // random dirt road end-to-end; see vehicles.spawnConvoy)

@@ -17,50 +17,74 @@ export function makeBuildings3(S, scene) {
   const trunkI = new THREE.InstancedMesh(GEO.cyl, mat(0x5d3f20), trees.length);
   const canopyI = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), trees.length);
   const canopy2I = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), trees.length);
+  const canopy3I = new THREE.InstancedMesh(GEO.cone, mat(0xffffff), trees.length); // pine top tier
+  const leafAI = new THREE.InstancedMesh(GEO.ico, mat(0xffffff), trees.length);    // broadleaf style
+  const leafBI = new THREE.InstancedMesh(GEO.ico, mat(0xffffff), trees.length);
   const snowCapI = new THREE.InstancedMesh(GEO.cone, mat(0xeef4f9), trees.length);
   const stoneI = new THREE.InstancedMesh(GEO.ico, mat(0x8d948b), stones.length);
+  const stone2I = new THREE.InstancedMesh(GEO.ico, mat(0x7b8278), stones.length);   // companion chunk
   const oreI = new THREE.InstancedMesh(GEO.ico, mat(0x8d774a), ores.length);
   const oreTipI = new THREE.InstancedMesh(GEO.ico, mat(0xd8a850, { emissive: 0x6a4a10 }), ores.length);
-  for (const m2 of [trunkI, canopyI, canopy2I, snowCapI, stoneI, oreI, oreTipI]) {
+  const oreTip2I = new THREE.InstancedMesh(GEO.ico, mat(0xc89544, { emissive: 0x5a3e0c }), ores.length);
+  for (const m2 of [trunkI, canopyI, canopy2I, canopy3I, leafAI, leafBI, snowCapI, stoneI, stone2I, oreI, oreTipI, oreTip2I]) {
     m2.frustumCulled = false;
     scene.add(m2);
   }
-  // per-tree canopy color variation (and winter detection for snow caps)
+  // per-tree style (pine vs broadleaf) + color variation + winter snow caps
   const C1 = new THREE.Color(), C2 = new THREE.Color();
-  const treeWinter = [];
+  const treeWinter = [], treeLeafy = [];
   trees.forEach((n, i) => {
     const j = 0.85 + ((n.seed * 7.3) % 1) * 0.4;
     const winter = S.world.biomeAt(n.x, n.y) === 'winter';
+    const leafy = !winter && ((n.seed * 13.1) % 1) < 0.42;
     treeWinter.push(winter);
+    treeLeafy.push(leafy);
     C1.setHex(winter ? 0x3c5530 : 0x35511f).multiplyScalar(j);
     C2.setHex(winter ? 0x5b7a4a : 0x507a30).multiplyScalar(j);
     canopyI.setColorAt(i, C1);
     canopy2I.setColorAt(i, C2);
+    canopy3I.setColorAt(i, C2);
+    C1.setHex(0x466628).multiplyScalar(j);
+    C2.setHex(0x5d8136).multiplyScalar(j);
+    leafAI.setColorAt(i, C1);
+    leafBI.setColorAt(i, C2);
   });
-  if (canopyI.instanceColor) canopyI.instanceColor.needsUpdate = true;
-  if (canopy2I.instanceColor) canopy2I.instanceColor.needsUpdate = true;
+  for (const m2 of [canopyI, canopy2I, canopy3I, leafAI, leafBI]) {
+    if (m2.instanceColor) m2.instanceColor.needsUpdate = true;
+  }
   const M = new THREE.Matrix4();
   let nodeRefresh = 0;
 
   function refreshNodes() {
+    const HIDE = new THREE.Vector3(0.001, 0.001, 0.001);
     trees.forEach((n, i) => {
       const s = n.amount <= 0 ? 0.001 : 0.55 + 0.45 * (n.amount / n.max);
       const lean = ((n.seed * 13.7) % 1 - 0.5) * 0.12;
+      const leafy = treeLeafy[i];
       M.makeRotationZ(lean).scale(new THREE.Vector3(7 * s, 30 * s, 7 * s)).setPosition(n.x, 15 * s, n.y);
       trunkI.setMatrixAt(i, M);
-      M.makeRotationY(n.seed).scale(new THREE.Vector3(30 * s, 42 * s, 30 * s)).setPosition(n.x, 36 * s, n.y);
+      // pine tiers (hidden for broadleaf trees)
+      M.makeRotationY(n.seed).scale(leafy ? HIDE : new THREE.Vector3(31 * s, 36 * s, 31 * s)).setPosition(n.x, 32 * s, n.y);
       canopyI.setMatrixAt(i, M);
-      M.makeRotationY(n.seed * 2).scale(new THREE.Vector3(20 * s, 30 * s, 20 * s)).setPosition(n.x + 4, 56 * s, n.y - 3);
+      M.makeRotationY(n.seed * 2).scale(leafy ? HIDE : new THREE.Vector3(23 * s, 28 * s, 23 * s)).setPosition(n.x + 2, 52 * s, n.y - 2);
       canopy2I.setMatrixAt(i, M);
+      M.makeRotationY(n.seed * 3).scale(leafy ? HIDE : new THREE.Vector3(14 * s, 22 * s, 14 * s)).setPosition(n.x + 3, 70 * s, n.y - 3);
+      canopy3I.setMatrixAt(i, M);
+      // broadleaf blobs (hidden for pines)
+      M.makeRotationY(n.seed).scale(!leafy ? HIDE : new THREE.Vector3(26 * s, 20 * s, 26 * s)).setPosition(n.x, 42 * s, n.y);
+      leafAI.setMatrixAt(i, M);
+      M.makeRotationY(n.seed * 2.3).scale(!leafy ? HIDE : new THREE.Vector3(17 * s, 14 * s, 17 * s)).setPosition(n.x + 6 * s, 56 * s, n.y - 4 * s);
+      leafBI.setMatrixAt(i, M);
       const capS = treeWinter[i] ? s : 0.001;
-      M.makeScale(13 * capS, 12 * capS, 13 * capS).setPosition(n.x + 4, 70 * capS, n.y - 3);
+      M.makeScale(11 * capS, 10 * capS, 11 * capS).setPosition(n.x + 3, 80 * capS, n.y - 3);
       snowCapI.setMatrixAt(i, M);
     });
-    snowCapI.instanceMatrix.needsUpdate = true;
     stones.forEach((n, i) => {
       const s = n.amount <= 0 ? 0.001 : (0.55 + 0.45 * (n.amount / n.max)) * n.r;
       M.makeRotationY(n.seed).scale(new THREE.Vector3(s, s * 0.75, s)).setPosition(n.x, s * 0.45, n.y);
       stoneI.setMatrixAt(i, M);
+      M.makeRotationY(n.seed * 3).scale(new THREE.Vector3(s * 0.45, s * 0.35, s * 0.45)).setPosition(n.x + s * 0.9, s * 0.2, n.y + s * 0.35);
+      stone2I.setMatrixAt(i, M);
     });
     ores.forEach((n, i) => {
       const s = n.amount <= 0 ? 0.001 : (0.55 + 0.45 * (n.amount / n.max)) * n.r;
@@ -68,8 +92,10 @@ export function makeBuildings3(S, scene) {
       oreI.setMatrixAt(i, M);
       M.makeScale(s * 0.4, s * 0.34, s * 0.4).setPosition(n.x + 3, s * 0.85, n.y - 2);
       oreTipI.setMatrixAt(i, M);
+      M.makeScale(s * 0.26, s * 0.22, s * 0.26).setPosition(n.x - s * 0.5, s * 0.7, n.y + s * 0.3);
+      oreTip2I.setMatrixAt(i, M);
     });
-    for (const m2 of [trunkI, canopyI, canopy2I, stoneI, oreI, oreTipI]) m2.instanceMatrix.needsUpdate = true;
+    for (const m2 of [trunkI, canopyI, canopy2I, canopy3I, leafAI, leafBI, snowCapI, stoneI, stone2I, oreI, oreTipI, oreTip2I]) m2.instanceMatrix.needsUpdate = true;
   }
   refreshNodes();
 
