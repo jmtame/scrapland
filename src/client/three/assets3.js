@@ -74,9 +74,11 @@ export function glowSprite(hex, scale = 60) {
   const m = new THREE.SpriteMaterial({
     map: glowTexture(), color: hex, transparent: true,
     blending: THREE.AdditiveBlending, depthWrite: false,
+    depthTest: false, // light blooms must never get depth-clipped by terrain
   });
   const s = new THREE.Sprite(m);
   s.scale.set(scale, scale, 1);
+  s.renderOrder = 4;
   return s;
 }
 // flat ground-shadow disc (a real plane, NOT a billboard sprite)

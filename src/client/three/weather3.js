@@ -58,14 +58,21 @@ export function makeWeather3(S, scene) {
     }
   };
 
-  // fog banks
+  // fog banks: FLAT mist planes hugging the ground (billboard sprites get
+  // depth-clipped by the terrain at a tilted camera — sharp cutoff artifact)
   const fogSprites = [];
   const ensureFog = () => {
     if (fogSprites.length || !S.fogBanks) return;
     for (const f of S.fogBanks) {
-      const m = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xd6dee6, transparent: true, opacity: 0, depthWrite: false });
-      const s = new THREE.Sprite(m);
-      s.scale.set(f.r * 3, f.r * 1.6, 1);
+      const m = new THREE.MeshBasicMaterial({
+        map: glowTexture(), color: 0xd6dee6, transparent: true, opacity: 0,
+        depthWrite: false,
+      });
+      const s = new THREE.Mesh(new THREE.CircleGeometry(1, 16), m);
+      s.rotation.x = -Math.PI / 2;
+      s.scale.set(f.r * 1.7, f.r * 1.15, 1);
+      s.position.y = 2.2;
+      s.renderOrder = 3;
       scene.add(s);
       fogSprites.push({ f, s });
     }
@@ -123,7 +130,7 @@ export function makeWeather3(S, scene) {
       for (const { f, s } of fogSprites) {
         const winter = S.world.biomeAt(f.x, f.y) === 'winter';
         s.material.opacity = winter ? 0 : Math.min(0.5, W.fog * f.dens * 0.5);
-        s.position.set(f.x, 26, f.y);
+        s.position.set(f.x, 2.2, f.y);
       }
       let n = 0;
       if (S.fireflies) {
