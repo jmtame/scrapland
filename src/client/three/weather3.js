@@ -108,12 +108,14 @@ export function makeWeather3(S, scene) {
       }
       const cLight = rig.lightLevel();
       for (const { cl, g, sh, matC } of cloudGroups) {
-        g.position.set(cl.x, 1250, cl.y);
+        // altitude must stay BELOW the camera eye (~1230 at default zoom) or
+        // clouds fall outside the downward frustum and never appear in play
+        g.position.set(cl.x, 560, cl.y);
         sh.position.set(cl.x + 64, 2.5, cl.y + 86);
-        // fade the cloud BODY out when over the action; the shadow persists
+        // ~50% transparent overall; softer (not invisible) over the action
         const dx = cl.x - rig.cx, dy = cl.y - rig.cy;
         const d = Math.sqrt(dx * dx + dy * dy);
-        const targetOp = (d < 700 ? 0.08 : d < 1400 ? 0.08 + (d - 700) / 700 * 0.42 : 0.5) * cl.op;
+        const targetOp = (d < 700 ? 0.22 : d < 1400 ? 0.22 + (d - 700) / 700 * 0.28 : 0.5) * cl.op;
         matC.opacity += (targetOp - matC.opacity) * Math.min(1, dt * 4);
         matC.color.setScalar(0.82 + cLight * 0.18);
         sh.material.opacity = (0.32 + 0.26 * cLight) * cl.op; // crisper at noon
