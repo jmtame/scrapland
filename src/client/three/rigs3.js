@@ -20,7 +20,7 @@ function ball(hex, r, x, y, z, sy = 1, sz = 1) {
 }
 
 // ---------- humanoid ----------
-const GUNS = {
+export const GUNS = {
   pistol: (g) => g.add(box(0x23261f, 10, 4, 3.4, 11, 0, 0)),
   rifle: (g) => { g.add(box(0x23261f, 20, 3.6, 3.4, 15, 0, 0)); g.add(box(0x4a3a20, 5, 5, 3.8, 7, -1, 0)); },
   shotgun: (g) => { g.add(box(0x2b2620, 16, 4.6, 4, 13, 0, 0)); g.add(box(0x5b4226, 5, 5.5, 4.2, 5, -1, 0)); },

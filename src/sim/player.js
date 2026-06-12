@@ -25,6 +25,10 @@ export function updatePlayer(S, dt) {
   p.hurt = Math.max(0, p.hurt - dt);
   p.invuln = Math.max(0, p.invuln - dt);
 
+  // copter physics runs unconditionally — piloted, abandoned, or with a
+  // dead pilot: an unmanned heli spools down and comes back to earth
+  moveCopter(S, dt);
+
   if (p.dead) {
     p.deadT -= dt;
     if (p.deadT <= 0) respawnPlayer(S);
@@ -41,14 +45,15 @@ export function updatePlayer(S, dt) {
   p.regenDelay = Math.max(0, p.regenDelay - dt);
   if (p.regenDelay <= 0 && p.health < p.maxhp) p.health = Math.min(p.maxhp, p.health + 12 * dt);
 
-  if (p.inCopter) { moveCopter(S, dt); return; }
+  if (p.inCopter) return;
 
   // aim
   p.angle = Math.atan2(cmd.my - p.y, cmd.mx - p.x);
 
-  // movement
+  // movement (analog vector wins when the client provides one — FP look-relative)
   let dx = (cmd.right ? 1 : 0) - (cmd.left ? 1 : 0);
   let dy = (cmd.down ? 1 : 0) - (cmd.up ? 1 : 0);
+  if (cmd.moveX || cmd.moveY) { dx = cmd.moveX; dy = cmd.moveY; }
   let speed = cmd.run ? p.run : p.walk;
   const wepK = curWeapon(S);
   if (wepK === 'minigun' && S.weapons.minigun.spin >= WEAPONS.minigun.windup) speed *= 0.4;
@@ -226,14 +231,38 @@ export function repairNearby(S) {
   return true; // wanted to repair (lock or funds) — swing consumed
 }
 
+// leave the copter; falling from height hurts (Rust-style eject)
+function dismountCopter(S) {
+  const p = S.player, c = S.copter;
+  const alt = (c && c.alt) || 0;
+  if (alt < COPTER.safeAlt) {
+    // landing-height exit: keep the no-base guard
+    const gx = Math.floor(p.x / TILE), gy = Math.floor(p.y / TILE);
+    if (S.structures.has(gkey(gx, gy))) { tip(S, "Can't land on a base"); return -1; }
+  }
+  p.inCopter = false;
+  p.y += COPTER.r + PLAYER_R + 6;
+  if (alt >= COPTER.safeAlt) {
+    const dmg = (alt - COPTER.safeAlt + 4) * 1.25;
+    p.health -= dmg;
+    p.regenDelay = Math.max(p.regenDelay, 3);
+    p.hurt = 0.4;
+    S.shake = Math.max(S.shake, 7);
+    addFloat(S, p.x, p.y - 24, 'fall -' + Math.round(dmg), '#d2664a');
+    if (p.health <= 0) { playerDie(S, true); return alt; }
+  }
+  return alt;
+}
+
+export function bailOut(S) {
+  if (!S.player.inCopter) return 0;
+  return dismountCopter(S);
+}
+
 export function interact(S) {
   const p = S.player;
   if (p.inCopter) {
-    // exit copter (not over a base)
-    const gx = Math.floor(p.x / TILE), gy = Math.floor(p.y / TILE);
-    if (S.structures.has(gkey(gx, gy))) { tip(S, "Can't land on a base"); return; }
-    p.inCopter = false;
-    p.y += COPTER.r + PLAYER_R + 6;
+    dismountCopter(S);
     return;
   }
   if (S.copter && !S.copter.destroyed && dist(p.x, p.y, S.copter.x, S.copter.y) < COPTER.r + PLAYER_R + 34) {

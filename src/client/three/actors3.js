@@ -422,17 +422,22 @@ export function makeActors3(S, scene) {
           gathering: p.swing > 0 && S.slot === 0,
           jack: jacking, bodyArmor: p.bodyArmor, facemask: p.facemask, vx: p.vx, vy: p.vy,
         });
-        if (p.dead) g.visible = false;
+        if (p.dead || rig.hideOwnRig) g.visible = false;
       }
       if (S.copter && !S.copter.destroyed) {
         const cg = copters.get(S.copter, 0x5d684c);
         const fly = p.inCopter;
-        cg.position.set(S.copter.x, fly ? 80 : 0, S.copter.y);
+        const calt = S.copter.alt || 0;
+        cg.position.set(S.copter.x, calt, S.copter.y);
+        cg.rotation.order = 'YZX';
         cg.rotation.y = -(S.copter.angle || 0);
+        // true attitude from the flight model: pitch + roll are sim state now
+        cg.rotation.z = (S.copter.pitchA || 0) * 0.9;
+        cg.rotation.x = (S.copter.rollA || 0) * 0.9;
         cg.userData.rotor.rotation.y = (S.copter.rotor || 0) * 3;
         cg.userData.tailRotor.rotation.z = (S.copter.rotor || 0) * 11;
         cg.userData.pilot.visible = fly;
-        cg.userData.sh.position.y = fly ? -78 : 1;
+        cg.userData.sh.position.y = calt > 3 ? -calt + 1 : 1;
       }
       // ---- guards ----
       for (const gd of S.guards) {
@@ -682,8 +687,26 @@ export function makeActors3(S, scene) {
           gg.userData = { head, tail, tail2 };
           return gg;
         });
-        g.position.set(b.x, 18, b.y);
+        // player bullets follow the look pitch (FP: shots track the crosshair);
+        // AI bullets stay at standing gun height
+        const ud = g.userData;
+        if (ud.h0 === undefined) {
+          if (b.from === OWNER && rig.fp) {
+            ud.h0 = (rig.eyeH + (rig.jumpH || 0)) - 6;
+            ud.slope = Math.tan(rig.pitch || 0);
+            ud.sx = b.x; ud.sy = b.y;
+            ud.tilt = Math.atan(ud.slope);
+          } else { ud.h0 = null; }
+        }
+        let bh = 18;
+        if (ud.h0 !== null) {
+          const trav = Math.hypot(b.x - ud.sx, b.y - ud.sy);
+          bh = Math.min(220, Math.max(3, ud.h0 + ud.slope * trav));
+        }
+        g.position.set(b.x, bh, b.y);
+        g.rotation.order = 'YZX';
         g.rotation.y = -Math.atan2(b.vy, b.vx);
+        g.rotation.z = ud.h0 !== null && bh > 3 && bh < 220 ? ud.tilt : 0;
         const hot = b.col === 'hmg' ? 0xff6a30 : b.ricochet ? 0x9ae2ff : 0xffd9a0;
         const warm = b.col === 'hmg' ? 0xe83c14 : b.ricochet ? 0x5cb8e8 : 0xffb054;
         g.userData.head.material.color.setHex(hot);
@@ -702,8 +725,24 @@ export function makeActors3(S, scene) {
           gg.add(glow);
           return gg;
         });
-        g.position.set(r.x, 18, r.y);
+        const ud = g.userData;
+        if (ud.h0 === undefined) {
+          if (r.from === OWNER && rig.fp) {
+            ud.h0 = (rig.eyeH + (rig.jumpH || 0)) - 6;
+            ud.slope = Math.tan(rig.pitch || 0);
+            ud.sx = r.x; ud.sy = r.y;
+            ud.tilt = Math.atan(ud.slope);
+          } else { ud.h0 = null; }
+        }
+        let rh = 18;
+        if (ud.h0 !== null) {
+          const trav = Math.hypot(r.x - ud.sx, r.y - ud.sy);
+          rh = Math.min(220, Math.max(6, ud.h0 + ud.slope * trav));
+        }
+        g.position.set(r.x, rh, r.y);
+        g.rotation.order = 'YZX';
         g.rotation.y = -Math.atan2(r.vy, r.vx);
+        g.rotation.z = ud.h0 !== null && rh > 6 && rh < 220 ? ud.tilt : 0;
       }
       for (const gr of S.grenades) {
         const g = simpleMeshes.get(gr, () => {

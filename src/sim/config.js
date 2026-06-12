@@ -72,7 +72,17 @@ export const armorReduce = (lvl, part) => ARMOR[part][clampLvl(lvl)];
 const clampLvl = (l) => (l < 0 ? 0 : l > 3 ? 3 : l | 0);
 
 // ---- vehicles / turrets ----
-export const COPTER = { speed: 560, boost: 980, accel: 360, drag: 0.55, dragIdle: 0.85, turn: 2.1, r: 30, hp: 260 };
+export const COPTER = {
+  // shared / AI-copter tuning (ai/unit.js flyTo)
+  speed: 560, boost: 980, accel: 360, drag: 0.55, dragIdle: 0.85, turn: 2.1, r: 30, hp: 260,
+  // player flight model: physics-driven rotor craft (Rust minicopter feel).
+  // Rotor thrusts along the tilted local up; momentum + torque, no auto-level.
+  grav: 180, liftMax: 268, liftExp: 1.6,
+  spinUp: 0.6, spinDown: 0.9, rpmDecay: 0.12,
+  pitchK: 0.0040, rollK: 0.0020, yawK: 3.2, bank: 1.0, stab: 0.5,
+  angDrag: 0.10, linDrag: 0.78, altDrag: 0.45,
+  ceiling: 470, safeAlt: 26,
+};
 export const TRANSPORT = { speed: 455, accel: 300, drag: 0.55, turn: 1.6, r: 46, seats: 4, cost: 40, hp: 360 };
 export const TTIER = {
   1: { name: 'Pistol', dmg: 14, rof: 0.5,  speed: 1000, spread: 0.05, mag: 12, reload: 1.6, range: 340, lead: 0 },

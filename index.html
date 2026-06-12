@@ -61,6 +61,12 @@ canvas#game { position: fixed; inset: 0; display: block; }
 #help.min .body { display: none; }
 #help .body { margin-top: 7px; color: var(--ink-dim); }
 #help kbd { background: var(--panel2); border: 1px solid var(--edge2); border-radius: 3px; padding: 0 4px; font-size: 10px; color: var(--ink); }
+#xhair { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%;
+  background: rgba(238,242,232,.92); box-shadow: 0 0 0 1px rgba(18,18,14,.6), 0 0 7px rgba(0,0,0,.4); pointer-events: none; z-index: 30; }
+#xhair.hidden { display: none; }
+#fphint { position: fixed; left: 50%; top: 60%; transform: translateX(-50%); padding: 9px 16px; background: rgba(18,17,12,.8);
+  border: 1px solid var(--edge2); border-radius: 6px; color: var(--ink); font-size: 13px; pointer-events: none; z-index: 30; }
+#fphint.hidden { display: none; }
 
 #vitals { position: fixed; left: 18px; bottom: 18px; padding: 9px 12px; display: flex; align-items: center; gap: 9px; }
 #vitals .lbl { font-size: 10px; letter-spacing: .1em; color: var(--ink-dim); }
@@ -77,6 +83,8 @@ canvas#game { position: fixed; inset: 0; display: block; }
 .slot { width: 58px; height: 58px; background: var(--panel); border: 1px solid var(--edge2); border-radius: 8px;
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; }
 .slot .key { position: absolute; top: 3px; left: 6px; font-size: 9px; color: var(--ink-dim); }
+.bpiece { position: relative; }
+.bpiece .key { position: absolute; top: 3px; left: 6px; font-size: 9px; color: var(--ink-dim); }
 .slot .nm { font-size: 8px; letter-spacing: .04em; color: var(--ink-dim); text-transform: uppercase; }
 .slot svg { width: 26px; height: 26px; color: var(--ink); }
 .slot.sel { border-color: var(--accent); box-shadow: 0 0 10px rgba(208,139,60,.4), inset 0 0 6px rgba(208,139,60,.15); }
@@ -144,10 +152,12 @@ canvas#game { position: fixed; inset: 0; display: block; }
     <h4>SCRAPLAND <span id="helpToggle">show</span></h4>
     <div class="body">
       Scavenge scrap, build a base, outlast 7 AI teams.<br><br>
-      <kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>1–9</kbd> slots<br>
-      <kbd>B</kbd> build · <kbd>R</kbd> reload/rotate · <kbd>Q</kbd> grenade/cycle<br>
-      <kbd>U</kbd> upgrade · <kbd>G</kbd> fence · <kbd>T</kbd> supply signal<br>
-      <kbd>E</kbd> interact · <kbd>Esc</kbd> close · wheel: cycle piece<br><br>
+      Click to capture the mouse · <kbd>Esc</kbd> releases it<br>
+      <kbd>WASD</kbd> move · mouse: look · <kbd>Space</kbd> jump/eject<br>
+      <kbd>Shift</kbd> run · <kbd>M</kbd> map · copter steers toward your aim<br>
+      <kbd>1–9</kbd> slots · <kbd>B</kbd> build · <kbd>R</kbd> reload/rotate<br>
+      <kbd>Q</kbd> grenade/cycle · <kbd>U</kbd> upgrade · <kbd>G</kbd> fence<br>
+      <kbd>T</kbd> supply signal · <kbd>E</kbd> interact · wheel: cycle piece<br><br>
       Trade zone at map centre is a safe zone. Cupboard claims and protects your base — keep it stocked. Beware monument guards and wildlife.<br><br>
       Seed: <span id="seedval">—</span>
     </div>
@@ -164,7 +174,7 @@ canvas#game { position: fixed; inset: 0; display: block; }
     <span id="hptxt">100</span>
   </div>
   <div id="buildmenu" class="panel hidden">
-    <div class="hint"><b>Q</b>/wheel piece · <b>R</b> rotate · <b>U</b> upgrade · <b>RMB</b> remove</div>
+    <div class="hint"><b>1–5</b> piece · <b>Q</b>/wheel cycle · <b>R</b> rotate · <b>U</b> upgrade · <b>RMB</b> remove</div>
     <div class="row" id="bpieces"></div>
   </div>
   <div id="hotbar"></div>
@@ -173,6 +183,8 @@ canvas#game { position: fixed; inset: 0; display: block; }
     <div id="ammo-rl"></div>
   </div>
   <div id="tip"></div>
+  <div id="xhair" class="hidden"></div>
+  <div id="fphint">Click to play — mouse captured for first-person look (<b>Esc</b> to release, <b>M</b> for map)</div>
   <div id="store" class="modal hidden"></div>
   <div id="shop" class="modal hidden"></div>
 </div>

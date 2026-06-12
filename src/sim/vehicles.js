@@ -3,33 +3,110 @@
 import { COPTER, TRANSPORT, CONVOY, PATROL, WORLD, TILE, OWNER } from './config.js';
 import { TAU, clamp, dist, dist2, ptSeg, turnToward } from './util.js';
 import { blocked, wallBlocksView, boulderLine, inSafeZone } from './physics.js';
-import { hurtPlayer, hurtBot, vehicleWreck, botDie, spawnBullet, explode } from './combat.js';
+import { hurtPlayer, hurtBot, hurtCopter, vehicleWreck, botDie, spawnBullet, explode } from './combat.js';
 import { damageStructure, damageWall, damageDeploy, foundationAt } from './building.js';
 import { addFloat, burst, addLoot, spillStack } from './state.js';
 
 // ---- player minicopter ----
+// Player minicopter: physics-driven rotor craft (Rust-like).
+// The rotor pushes along the craft's TILTED local up — level it lifts,
+// nose-down some lift becomes forward thrust, rolled it slips sideways,
+// over-tilt and you trade away the vertical lift. Momentum everywhere,
+// torque-based attitude with only mild passive stability — no auto-hover,
+// no auto-level, no hard speed cap. Runs piloted or abandoned (it falls).
 export function moveCopter(S, dt) {
   const c = S.copter, p = S.player, cmd = S.cmd;
-  if (!c || c.destroyed) { p.inCopter = false; return; }
-  if (cmd.left) c.angle -= COPTER.turn * dt;
-  if (cmd.right) c.angle += COPTER.turn * dt;
-  let thr = 0;
-  if (cmd.up) thr = 1; else if (cmd.down) thr = -0.55;
-  const cap = cmd.run ? COPTER.boost : COPTER.speed;
-  c.vx += Math.cos(c.angle) * COPTER.accel * thr * dt;
-  c.vy += Math.sin(c.angle) * COPTER.accel * thr * dt;
-  const drag = Math.pow(thr !== 0 ? COPTER.drag : COPTER.dragIdle, dt);
-  c.vx *= drag; c.vy *= drag;
-  const sp = Math.hypot(c.vx, c.vy);
-  if (sp > cap) { c.vx *= cap / sp; c.vy *= cap / sp; }
+  if (!c || c.destroyed) { if (p.inCopter) p.inCopter = false; return; }
+  const piloted = p.inCopter;
+  c.alt = c.alt || 0; c.altV = c.altV || 0; c.rpm = c.rpm || 0;
+  c.pitchA = c.pitchA || 0; c.rollA = c.rollA || 0;
+  c.pitchV = c.pitchV || 0; c.rollV = c.rollV || 0; c.yawV = c.yawV || 0;
+
+  // ---- rotor: gradual spool with a nonlinear lift curve ----
+  const thrIn = piloted ? (cmd.up ? 1 : 0) - (cmd.down ? 1 : 0) : 0;
+  if (thrIn > 0) c.rpm = Math.min(1, c.rpm + COPTER.spinUp * dt);
+  else if (thrIn < 0) c.rpm = Math.max(0, c.rpm - COPTER.spinDown * dt);
+  else c.rpm = Math.max(0, c.rpm - COPTER.rpmDecay * dt * (piloted ? 1 : 2.2));
+  const lift = COPTER.liftMax * Math.pow(c.rpm, COPTER.liftExp);
+
+  // ---- attitude: stick torque + angular momentum + CoM-below-rotor ----
+  const stickP = piloted ? clamp(cmd.stickPitch || 0, -2600, 2600) : 0;
+  const stickR = piloted ? clamp(cmd.stickRoll || 0, -2600, 2600) : 0;
+  const yawIn = piloted ? (cmd.right ? 1 : 0) - (cmd.left ? 1 : 0) : 0;
+  c.pitchV += stickP * COPTER.pitchK * dt;          // mouse fwd → nose down
+  c.rollV += stickR * COPTER.rollK * dt;            // roll is half as strong
+  c.yawV += yawIn * COPTER.yawK * dt;
+  if (!cmd.flat) c.rollV += yawIn * COPTER.bank * dt; // bank into A/D turns
+  // centre of mass under the rotor: gentle self-righting, never snappy
+  c.pitchV -= c.pitchA * COPTER.stab * dt;
+  c.rollV -= c.rollA * COPTER.stab * dt;
+  const ad = Math.pow(COPTER.angDrag, dt);
+  c.pitchV *= ad; c.rollV *= ad;
+  c.yawV *= Math.pow(0.05, dt);
+  c.pitchA = clamp(c.pitchA + c.pitchV * dt, -1.1, 1.1);
+  c.rollA = clamp(c.rollA + c.rollV * dt, -1.05, 1.05);
+  c.angle += c.yawV * dt;
+
+  // ---- thrust: decompose the tilted rotor vector ----
+  const vert = lift * Math.cos(c.pitchA) * Math.cos(c.rollA);
+  const fwd = lift * Math.sin(-c.pitchA);
+  const lat = lift * Math.sin(c.rollA);
+  const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
+  c.vx += (fwd * ca - lat * sa) * dt;
+  c.vy += (fwd * sa + lat * ca) * dt;
+  const ld = Math.pow(COPTER.linDrag, dt);
+  c.vx *= ld; c.vy *= ld;
   c.x += c.vx * dt; c.y += c.vy * dt;
   if (c.x < COPTER.r) { c.x = COPTER.r; c.vx *= -0.3; }
   if (c.y < COPTER.r) { c.y = COPTER.r; c.vy *= -0.3; }
   if (c.x > WORLD.w - COPTER.r) { c.x = WORLD.w - COPTER.r; c.vx *= -0.3; }
   if (c.y > WORLD.h - COPTER.r) { c.y = WORLD.h - COPTER.r; c.vy *= -0.3; }
+
+  // ---- vertical ----
+  c.altV += (vert - COPTER.grav) * dt;
+  c.altV *= Math.pow(COPTER.altDrag, dt);
+  // subtle ground effect: a cushion of air in the last few metres
+  if (c.alt < 26 && c.altV < 0) c.altV *= Math.pow(0.55, dt * (1 - c.alt / 26));
+  c.alt += c.altV * dt;
+  if (c.alt >= COPTER.ceiling) { c.alt = COPTER.ceiling; c.altV = Math.min(0, c.altV); }
+
+  // ---- ground contact: skids, tips, impact damage by impulse ----
+  if (c.alt <= 0) {
+    c.alt = 0;
+    const hSpd = Math.hypot(c.vx, c.vy);
+    const tilted = Math.abs(c.pitchA) + Math.abs(c.rollA);
+    const impact = Math.max(0, -c.altV - 70) + Math.max(0, hSpd - 300) * 0.3 + (tilted > 0.5 ? 16 : 0);
+    if (impact > 5) {
+      const dmg = impact * 1.1;
+      S.shake = Math.max(S.shake, Math.min(10, impact * 0.12));
+      addFloat(S, c.x, c.y - 30, (impact > 60 ? 'CRASH -' : 'hard landing -') + Math.round(dmg), '#d2664a');
+      burst(S, c.x, c.y, '#c9b48a', 12, 170);
+      c.altV = Math.min(40, -c.altV * 0.25);               // bounce
+      c.rollV += S.rng.rand(-1.3, 1.3) * Math.min(1, impact / 60); // tip
+      hurtCopter(S, c, dmg, true);
+      if (c.destroyed) return;
+    } else c.altV = Math.max(0, c.altV);
+    // skids: ground friction + the frame settles level when under-powered
+    const fr = Math.pow(c.rpm > 0.4 ? 0.45 : 0.1, dt);
+    c.vx *= fr; c.vy *= fr;
+    if (vert < COPTER.grav) {
+      const settle = Math.pow(0.18, dt);
+      c.pitchA *= settle; c.rollA *= settle;
+      c.pitchV *= settle; c.rollV *= settle;
+      // spool-up rattle on the pad
+      if (c.rpm > 0.3 && S.tick % 18 === 0) S.shake = Math.max(S.shake, 0.7);
+    }
+    // rotor wash kicks up dust
+    if (c.rpm > 0.45 && S.tick % 10 === 0) {
+      burst(S, c.x + S.rng.rand(-26, 26), c.y + S.rng.rand(-20, 20), '#b9a37e', 2, 130);
+    }
+  } else if (c.alt < 50 && c.rpm > 0.5 && S.tick % 14 === 0) {
+    burst(S, c.x + S.rng.rand(-30, 30), c.y + S.rng.rand(-24, 24), '#b9a37e', 2, 110);
+  }
+
   c.spd = Math.hypot(c.vx, c.vy);
-  c.rotor += dt * (20 + c.spd * 0.05);
-  p.x = c.x; p.y = c.y; p.vx = c.vx; p.vy = c.vy;
+  c.rotor += dt * (3 + c.rpm * 52 + c.spd * 0.02);
+  if (piloted) { p.x = c.x; p.y = c.y; p.vx = c.vx; p.vy = c.vy; }
 }
 
 // ---- transports ----

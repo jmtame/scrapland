@@ -1,8 +1,12 @@
 # SCRAPLAND
 
-A top-down survival game inspired by Rust. Scavenge scrap, build and fortify a
-base, arm up at the trade zone, and outlast 7 rival AI teams that gather,
-fortify, and raid each other across a large, procedurally-built map.
+A survival game inspired by Rust. Scavenge scrap, build and fortify a base,
+arm up at the trade zone, and outlast 7 rival AI teams that gather, fortify,
+and raid each other across a large, procedurally-built map.
+
+Branches: `main` — top-down 2D renderer · `three-js` — tilted low-poly 3D ·
+`fps` (this branch) — true first-person: pointer-lock mouselook, viewmodel
+weapons, look-relative movement, M opens the full-map view.
 
 Features: coordinated AI raids, build-first economy, weather + day/night with
 dynamic lighting, three biomes, wildlife, monuments + guards, quarry capture,
@@ -21,12 +25,21 @@ open index.html
 
 ## Controls
 
+Click the game to capture the mouse (Esc releases it).
+
 ```
 Move             W A S D        Run            hold Shift
-Aim / shoot      mouse          Reload         R
-Interact         E              Weapon slots   1 – 9
-Throw grenade    Q              Place fence    G
-Supply signal    T
+Look / shoot     mouse          Reload         R
+Jump             Space          Weapon slots   1 – 9
+Map view         M              Place fence    G
+Interact         E              Supply signal  T
+Throw grenade    Q
+Minicopter       physics rotor craft: W/S throttle (rotor spools, momentum
+                 everywhere, no auto-level) · mouse = stick (fwd tilts the
+                 nose down for speed, back to flare/brake; left/right rolls)
+                 A/D banked turns · hold Ctrl or C for flat precision turns
+                 hold Alt to freelook · Space ejects (high bails hurt/kill)
+                 land soft and level — hot or tilted touchdowns damage it
 
 Build mode       B   (slot 6)
   cycle piece      Q / mouse wheel
@@ -50,9 +63,13 @@ renderer:
   raid / return / trade) under a per-team commander that assigns defenders,
   one sticky builder, and rocketers; raids stage at a standoff ring, focus one
   breach piece on the cheapest path to the tool cupboard, then push in.
-- `src/client/` — three.js renderer (WebGL): tilted low-poly 3D — extruded
-  bases, instanced nature, sun day-cycle (never dark), glow FX, weather —
-  plus a 2D overlay for markers/banners and the DOM HUD.
+- `src/client/` — three.js renderer (WebGL): low-poly 3D — extruded bases,
+  instanced nature, sun day-cycle (never dark), glow FX, weather — plus a 2D
+  overlay for markers/banners and the DOM HUD. On this branch the camera is
+  first-person (eye height under wall height, pointer-lock mouselook) with a
+  viewmodel (arms + weapon, bob/recoil/muzzle flash) rendered in a separate
+  depth-cleared pass; the sim is unchanged — aim, build, and interact all
+  drive the same 2D world model.
 
 ### Develop
 
@@ -62,6 +79,7 @@ npm run build        # src/ → dist/game.js  (commit the bundle)
 npm run watch
 npm test             # tests-v2/verify.js — world/combat invariants + match bars
 node tests-v2/sim_match.js 15 42    # headless match: minutes, seed
+node tests-v2/probe_copter.js       # minicopter flight-model checks (15)
 node tests-v2/shot.js out.png 42 5  # headless debug-map snapshot (sim only)
 ```
 

@@ -27,10 +27,13 @@ export function makeOverlay3(S, view, rig) {
     ctx.lineWidth = 2;
     if (dash) ctx.setLineDash(dash);
     ctx.beginPath();
+    let started = false;
     for (let i = 0; i <= 36; i++) {
       const a = (i / 36) * Math.PI * 2;
       const p = P(x + Math.cos(a) * R, y + Math.sin(a) * R);
-      i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+      if (p.behind) { started = false; continue; } // FP: ring may wrap behind the eye
+      started ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+      started = true;
     }
     ctx.stroke();
     ctx.setLineDash([]);
@@ -67,24 +70,26 @@ export function makeOverlay3(S, view, rig) {
         const def = BUILD[S.buildPiece];
         if (def.cat === 'cell') {
           const gx = tgt.gx * TILE, gy = tgt.gy * TILE;
-          ctx.beginPath();
-          [[0, 0], [TILE, 0], [TILE, TILE], [0, TILE]].forEach(([dx, dy], i) => {
-            const p = P(gx + dx, gy + dy);
-            i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
-          });
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
+          const pts = [[0, 0], [TILE, 0], [TILE, TILE], [0, TILE]].map(([dx, dy]) => P(gx + dx, gy + dy));
+          if (!pts.some((p) => p.behind)) {
+            ctx.beginPath();
+            pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
         } else {
           const seg = wallSegOf(tgt.key, { type: S.buildPiece, rot: S.buildRot & 1 });
           const a = P(seg[0], seg[1]), b = P(seg[2], seg[3]);
-          ctx.lineWidth = 8;
-          ctx.globalAlpha = 0.75;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
+          if (!a.behind && !b.behind) {
+            ctx.lineWidth = 8;
+            ctx.globalAlpha = 0.75;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
         }
         function afford() {
           for (const k in def.cost) if ((S.inv[k] || 0) < def.cost[k]) return false;

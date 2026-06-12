@@ -37,19 +37,24 @@ export function makeHud(S, view) {
     hotbar.appendChild(d);
   });
   const bpieces = $('bpieces');
-  for (const p of PIECES) {
+  PIECES.forEach((p, i) => {
     const d = document.createElement('div');
     d.className = 'bpiece';
     d.dataset.piece = p;
     const cost = Object.entries(BUILD[p].cost).map(([k, v]) => v + ' ' + k).join(' + ');
-    d.innerHTML = `${BPREV[p]}${BUILD[p].name}<br><span style="opacity:.7">${cost}</span>`;
+    d.innerHTML = `<span class="key">${i + 1}</span>${BPREV[p]}${BUILD[p].name}<br><span style="opacity:.7">${cost}</span>`;
     d.addEventListener('mousedown', (e) => { e.stopPropagation(); S.buildPiece = p; });
     bpieces.appendChild(d);
-  }
+  });
 
   // top buttons
   const btn = (id, fn) => $(id).addEventListener('mousedown', (e) => { e.stopPropagation(); fn($(id)); });
-  btn('mapbtn', (b) => { view.godView = !view.godView; b.classList.toggle('on', view.godView); b.textContent = view.godView ? 'Exit Map' : 'Map View'; });
+  btn('mapbtn', (b) => {
+    view.godView = !view.godView;
+    b.classList.toggle('on', view.godView);
+    b.textContent = view.godView ? 'Exit Map (M)' : 'Map (M)';
+    if (view.godView && document.pointerLockElement) document.exitPointerLock();
+  });
   btn('ghostbtn', (b) => { S.ghost = !S.ghost; b.classList.toggle('on', S.ghost); b.textContent = S.ghost ? 'Ghost: ON' : 'Ghost'; });
   btn('rocketbtn', (b) => { S.rapidRockets = !S.rapidRockets; b.classList.toggle('on', S.rapidRockets); b.textContent = S.rapidRockets ? 'Rockets: ON' : 'Rapid Rockets'; });
   btn('refillbtn', () => window.__refillAll());

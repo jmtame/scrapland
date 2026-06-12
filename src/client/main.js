@@ -6,6 +6,7 @@ import { makeTerrain3 } from './three/terrain3.js';
 import { makeBuildings3 } from './three/buildings3.js';
 import { makeActors3 } from './three/actors3.js';
 import { makeWeather3 } from './three/weather3.js';
+import { makeViewmodel } from './three/viewmodel3.js';
 import { makeOverlay3 } from './three/overlay3.js';
 import { bindInput } from './input.js';
 import { makeHud } from './hud.js';
@@ -26,6 +27,7 @@ function start() {
   const buildings = makeBuildings3(S, rig.scene);
   const actors = makeActors3(S, rig.scene);
   const weather = makeWeather3(S, rig.scene);
+  const viewmodel = makeViewmodel(S, view, rig);
   const overlay = makeOverlay3(S, view, rig);
   const hud = makeHud(S, view);
   bindInput(S, view, rig, hud);
@@ -103,7 +105,9 @@ function start() {
     buildings.sync(elapsed);
     actors.sync(elapsed, rig);
     weather.sync(elapsed, rig);
+    viewmodel.sync(elapsed);
     rig.render();
+    viewmodel.render(rig.renderer);
     overlay.draw();
     hud.update();
     S.events.length = 0;
